@@ -12,6 +12,7 @@ class DataCollatorWithMasking :
         mlm=True,
         mlm_probability=0.15,
         label_pad_token_id=-100,
+        eval_flag=True,
     ) : 
         self.build(profile_data)
         self.special_token_dict = special_token_dict
@@ -19,6 +20,7 @@ class DataCollatorWithMasking :
         self.mlm = mlm
         self.mlm_probability = mlm_probability
         self.label_pad_token_id = label_pad_token_id
+        self.eval_flag = eval_flag
 
 
     def build(self, profile_data) :
@@ -51,10 +53,13 @@ class DataCollatorWithMasking :
 
 
     def __call__(self, dataset) :
-        albums, genres, country = [], [], []
+        albums, genres, countries = [], [], []
         genders, ages, pr_interests, ch_interests = [], [], [], []
 
-        max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
+        if self.eval_flag :
+            max_length = min(self.max_length, max([len(d['album'])-1 for d in dataset]))    
+        else :
+            max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
 
         for data in dataset :
             d_id = data['id']
@@ -63,34 +68,34 @@ class DataCollatorWithMasking :
             pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
             ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
 
-            if len(data['album']) < max_length :
-                pad_length = max_length - len(data['album'])
-                data['album'] = data['album'] + [self.special_token_dict['album_pad_token_id']] * pad_length
+            album = data['album'][:-1] if self.eval_flag else data['album']
+            if len(album) < max_length :
+                pad_length = max_length - len(album)
+                album = album + [self.special_token_dict['album_pad_token_id']] * pad_length
             else :
-                data['album'] = data['album'][-max_length:]
+                album = album[-max_length:]
+            albums.append(album)
 
-            albums.append(data['album'])
-
-            if len(data['genre']) < max_length :
-                pad_length = max_length - len(data['genre'])
-                data['genre'] = data['genre'] + [self.special_token_dict['genre_pad_token_id']] * pad_length
+            genre = data['genre'][:-1] if self.eval_flag else data['genre']
+            if len(genre) < max_length :
+                pad_length = max_length - len(genre)
+                genre = genre + [self.special_token_dict['genre_pad_token_id']] * pad_length
             else :
-                data['genre'] = data['genre'][-max_length:]
+                genre = genre[-max_length:]
+            genres.append(genre)
 
-            genres.append(data['genre'])
-
-            if len(data['country']) < max_length :
-                pad_length = max_length - len(data['country'])
-                data['country'] = data['country'] + [self.special_token_dict['country_pad_token_id']] * pad_length
+            country = data['country'][:-1] if self.eval_flag else data['country']
+            if len(country) < max_length :
+                pad_length = max_length - len(country)
+                country = country + [self.special_token_dict['country_pad_token_id']] * pad_length
             else :
-                data['country'] = data['country'][-max_length:]
-
-            country.append(data['country'])
+                country = country[-max_length:]
+            countries.append(country)
 
         album_tensor = torch.tensor(albums, dtype=torch.int32)
         genre_tensor = torch.tensor(genres, dtype=torch.int32)
-        country_tensor = torch.tensor(country, dtype=torch.int32)
-
+        country_tensor = torch.tensor(countries, dtype=torch.int32)
+        
         genders = torch.tensor(genders, dtype=torch.int32)
         ages = torch.tensor(ages, dtype=torch.int32)
         pr_interests = torch.tensor(pr_interests, dtype=torch.int32)
@@ -147,10 +152,12 @@ class DataCollatorWithPadding :
         profile_data,
         special_token_dict,
         max_length,
+        eval_flag,
     ) : 
         self.build(profile_data)
         self.special_token_dict = special_token_dict
         self.max_length = max_length
+        self.eval_flag=eval_flag
 
 
     def build(self, profile_data) :
@@ -183,60 +190,118 @@ class DataCollatorWithPadding :
 
 
     def __call__(self, dataset) :
-        albums, genres, country = [], [], []
+        albums, genres, countries = [], [], []
+        genders, ages, pr_interests, ch_interests = [], [], [], []
 
         max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
 
-        for data in dataset :
-            d_id = data['id']
-            genders.append(self.gender_dict[self.profile_gender[d_id]])
-            ages.append(self.age_dict[self.profile_age[d_id]])
-            pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
-            ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
+        if self.eval_flag :
             
-            data['album'] = data['album'] + [self.special_token_dict['album_mask_token_id']]
-            if len(data['album']) < max_length :
-                pad_length = max_length - len(data['album'])
-                data['album'] = data['album'] + [self.special_token_dict['album_pad_token_id']] * pad_length
-            else :
-                data['album'] = data['album'][-max_length:]
+            labels = []
+            for data in dataset :
+                d_id = data['id']
+                genders.append(self.gender_dict[self.profile_gender[d_id]])
+                ages.append(self.age_dict[self.profile_age[d_id]])
+                pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
+                ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
 
-            albums.append(data['album'])
+                album, label = data['album'][:-1] + [self.special_token_dict['album_mask_token_id']], data['album'][-1]
+                if len(album) < max_length :
+                    pad_length = max_length - len(album)
+                    album = album + [self.special_token_dict['album_pad_token_id']] * pad_length
+                else :
+                    album = album[-max_length:]
+                albums.append(album)
+                labels.append(label)
 
-            data['genre'] = data['genre'] + [self.special_token_dict['genre_mask_token_id']]
-            if len(data['genre']) < max_length :
-                pad_length = max_length - len(data['genre'])
-                data['genre'] = data['genre'] + [self.special_token_dict['genre_pad_token_id']] * pad_length
-            else :
-                data['genre'] = data['genre'][-max_length:]
+                genre = data['genre'][:-1] + [self.special_token_dict['genre_mask_token_id']]
+                if len(genre) < max_length :
+                    pad_length = max_length - len(genre)
+                    genre = genre + [self.special_token_dict['genre_pad_token_id']] * pad_length
+                else :
+                    genre = genre[-max_length:]
+                genres.append(genre)
 
-            genres.append(data['genre'])
+                country = data['country'][:-1] + [self.special_token_dict['country_mask_token_id']]
+                if len(country) < max_length :
+                    pad_length = max_length - len(country)
+                    country = country + [self.special_token_dict['country_pad_token_id']] * pad_length
+                else :
+                    country = country[-max_length:]
+                countries.append(country)
 
-            data['country'] = data['country'] + [self.special_token_dict['country_mask_token_id']]
-            if len(data['country']) < max_length :
-                pad_length = max_length - len(data['country'])
-                data['country'] = data['country'] + [self.special_token_dict['country_pad_token_id']] * pad_length
-            else :
-                data['country'] = data['country'][-max_length:]
 
-            country.append(data['country'])
+            album_tensor = torch.tensor(albums, dtype=torch.int32)
+            genre_tensor = torch.tensor(genres, dtype=torch.int32)
+            country_tensor = torch.tensor(countries, dtype=torch.int32)
+            label_tensor = torch.tensor(labels, dtype=torch.int32)
 
-        albums_tensor = torch.tensor(albums, dtype=torch.int32)
-        genres_tensor = torch.tensor(genres, dtype=torch.int32)
-        country_tensor = torch.tensor(country, dtype=torch.int32)
+            genders = torch.tensor(genders, dtype=torch.int32)
+            ages = torch.tensor(ages, dtype=torch.int32)
+            pr_interests = torch.tensor(pr_interests, dtype=torch.int32)
+            ch_interests = torch.tensor(ch_interests, dtype=torch.int32)
 
-        genders = torch.tensor(genders, dtype=torch.int32)
-        ages = torch.tensor(ages, dtype=torch.int32)
-        pr_interests = torch.tensor(pr_interests, dtype=torch.int32)
-        ch_interests = torch.tensor(ch_interests, dtype=torch.int32)
+            batch = {
+                'album_input' : album_tensor, 
+                'labels' : label_tensor,
+                'genre_input' : genre_tensor,
+                'country_input' : country_tensor,
+                'gender' : genders,
+                'age' : ages,
+                'pr_interest' : pr_interests,
+                'ch_interest' : ch_interests
+            }
+            return batch
 
-        batch = {
-            'album_input' : albums_tensor, 
-            'genre_input' : genres_tensor,
-            'country_input' : country_tensor,
-            'gender' : genders,
-            'age' : ages,
-            'pr_interest' : pr_interests,
-            'ch_interest' : ch_interests
-        }
-        return batch
+        else :
+                
+            for data in dataset :
+                d_id = data['id']
+                genders.append(self.gender_dict[self.profile_gender[d_id]])
+                ages.append(self.age_dict[self.profile_age[d_id]])
+                pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
+                ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
+                
+                album = data['album']
+                if len(album) < max_length :
+                    pad_length = max_length - len(album)
+                    album = album + [self.special_token_dict['album_pad_token_id']] * pad_length
+                else :
+                    album = album[-max_length:]
+                albums.append(album)
+
+                genre = data['genre']
+                if len(genre) < max_length :
+                    pad_length = max_length - len(genre)
+                    genre = genre + [self.special_token_dict['genre_pad_token_id']] * pad_length
+                else :
+                    genre = genre[-max_length:]
+                genres.append(genre)
+
+                country = data['country']
+                if len(country) < max_length :
+                    pad_length = max_length - len(country)
+                    country = country + [self.special_token_dict['country_pad_token_id']] * pad_length
+                else :
+                    country = country[-max_length:]
+                countries.append(country)
+
+            album_tensor = torch.tensor(albums, dtype=torch.int32)
+            genre_tensor = torch.tensor(genres, dtype=torch.int32)
+            country_tensor = torch.tensor(countries, dtype=torch.int32)
+
+            genders = torch.tensor(genders, dtype=torch.int32)
+            ages = torch.tensor(ages, dtype=torch.int32)
+            pr_interests = torch.tensor(pr_interests, dtype=torch.int32)
+            ch_interests = torch.tensor(ch_interests, dtype=torch.int32)
+
+            batch = {
+                'album_input' : album_tensor, 
+                'genre_input' : genre_tensor,
+                'country_input' : country_tensor,
+                'gender' : genders,
+                'age' : ages,
+                'pr_interest' : pr_interests,
+                'ch_interest' : ch_interests
+            }
+            return batch

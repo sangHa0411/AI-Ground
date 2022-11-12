@@ -9,11 +9,11 @@ import torch.nn as nn
 from tqdm import tqdm
 from model.model import Bert
 from model.config import BertConfig
-from utils.preprocessor import preprocess, parse
-from utils.collator import DataCollatorWithMasking
 from torch.utils.data import DataLoader
+from utils.metrics import compute_metrics
+from utils.preprocessor import preprocess, parse
+from utils.collator import DataCollatorWithMasking, DataCollatorWithPadding
 from utils.scheduler import LinearWarmupScheduler
-from sklearn.metrics import accuracy_score
 import warnings
 
 def train(args) :
@@ -38,29 +38,24 @@ def train(args) :
     df = preprocess(history_data_df, meta_data_df)
     dataset = parse(df)
 
+    # -- Model Arguments
+    max_album_value = max(df['album_id'].unique())
+    max_genre_value = max(df['genre'].unique())
+    max_country_value = max(df['country'].unique())
+
     # -- Token dictionary
     special_token_dict = {
-        'country_pad_token_id' : 1,
-        'country_mask_token_id' : 21,
-        'genre_pad_token_id' : 9,
-        'genre_mask_token_id' : 26,
-        'album_pad_token_id' : 0,
-        'album_mask_token_id' : 1,
+        'country_pad_token_id' : max_country_value+1,
+        'country_mask_token_id' : max_country_value+2,
+        'genre_pad_token_id' : max_genre_value+1,
+        'genre_mask_token_id' : max_genre_value+2,
+        'album_pad_token_id' : max_album_value+1,
+        'album_mask_token_id' : max_album_value+2,
     }
 
-    # -- Data Collator
-    data_collator = DataCollatorWithMasking(
-        profile_data=profile_data_df, 
-        special_token_dict=special_token_dict,
-        max_length=args.max_length,
-        mlm=True,
-        mlm_probability=args.mlm_probability,
-    )
-
-    # -- Model Arguments
-    album_size = max(df['album_id'].unique()) + 1
-    genre_size = max(df['genre'].unique()) + 1
-    country_size = max(df['country'].unique()) + 2
+    album_size = max_album_value + 3
+    genre_size = max_genre_value + 3
+    country_size = max_country_value + 3
 
     model_arguments = BertConfig(
         album_size=album_size,
@@ -79,25 +74,41 @@ def train(args) :
     # -- Model
     model = Bert(model_arguments).to(device)
 
+
     if args.do_eval :
 
-        # -- Split
-        datasets = dataset.train_test_split(test_size=0.1)
+        # -- Train Data Collator
+        train_data_collator = DataCollatorWithMasking(
+            profile_data=profile_data_df, 
+            special_token_dict=special_token_dict,
+            max_length=args.max_length,
+            mlm=True,
+            mlm_probability=args.mlm_probability,
+            eval_flag=True,
+        )
+
+        # -- Eval Data Collator
+        eval_data_collator = DataCollatorWithPadding(
+            profile_data=profile_data_df, 
+            special_token_dict=special_token_dict,
+            max_length=args.max_length,
+            eval_flag=True,
+        )
 
         # -- Data Loader 
         train_data_loader = DataLoader(
-            datasets['train'], 
+            dataset, 
             batch_size=args.train_batch_size, 
             shuffle=True,
-            collate_fn=data_collator
+            collate_fn=train_data_collator
         )
 
         # -- Data Loader 
         eval_data_loader = DataLoader(
-            datasets['test'], 
+            dataset, 
             batch_size=args.eval_batch_size, 
             shuffle=False,
-            collate_fn=data_collator
+            collate_fn=eval_data_collator
         )
 
         # -- Training
@@ -143,8 +154,8 @@ def train(args) :
                 print('Step : %d \t Loss : %.5f, Learning Rate : %f' %(step, loss, current_lr))
 
             if step % args.eval_steps == 0 and step > 0 :
-                print('Validation at %dstep' %step)
-                eval_loss, eval_acc = 0.0, 0.0
+                print('\nValidation at %d step' %step)
+                eval_predictions, eval_labels = [], []
                 for eval_data in tqdm(eval_data_loader) :
 
                     album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
@@ -158,80 +169,17 @@ def train(args) :
                         country_input=country_input
                     )
 
-                    predictions = torch.argmax(logits, -1)
-                    labels = data['labels'].long().to(device)
+                    logits = logits[album_input==special_token_dict['album_mask_token_id']]
 
-                    candidates = torch.where(labels==-100, False, True)
-                    rights = torch.where(labels==predictions, True, False)
-
-                    acc = torch.sum(rights & candidates) / torch.sum(candidates)
-                    eval_acc += acc.item()
-
-                    loss = loss_fn(logits.view(-1, album_size), labels.view(-1,))
-                    eval_loss += loss.item()
-
-                eval_acc /= len(eval_data_loader)
-                eval_loss /= len(eval_data_loader)
-                print('Step : %d \t Eval Loss : %.5f, Eval Accuracy : %.5f' %(step, eval_loss, eval_acc))
+                    eval_predictions.extend(logits.detach().cpu().numpy().tolist())
+                    eval_labels.extend(eval_data['labels'].detach().cpu().numpy().tolist())
+                
+                eval_log = compute_metrics(eval_predictions, eval_labels)
+                print(eval_log)
 
                 # model_path = os.path.join(args.save_path, f'checkpoint-{step}.pt')        
                 # torch.save(model.state_dict(), model_path)
-    else :
-        # -- Data Loader 
-        train_data_loader = DataLoader(
-            dataset, 
-            batch_size=args.train_batch_size, 
-            shuffle=True,
-            collate_fn=data_collator
-        )
-
-        # -- Training
-        train_data_iterator = iter(train_data_loader)
-        total_steps = len(train_data_loader) * args.epochs
-        warmup_steps = int(total_steps * args.warmup_ratio)
-
-        loss_fn = nn.CrossEntropyLoss().to(device)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-        scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
-
-        print('\nTraining')
-        for step in tqdm(range(total_steps)) :
-
-            try :
-                data = next(train_data_iterator)
-            except StopIteration :
-                train_data_iterator = iter(train_data_loader)
-                data = next(train_data_iterator)
-
-            optimizer.zero_grad()
-
-            album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
-            album_input = album_input.long().to(device)
-            genre_input = genre_input.long().to(device)
-            country_input = country_input.long().to(device)
-
-            logits = model(
-                album_input=album_input, 
-                genre_input=genre_input,
-                country_input=country_input
-            )
-
-            labels = data['labels'].long().to(device)
-            loss = loss_fn(logits.view(-1, album_size), labels.view(-1,))
-            
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-
-            if step % args.logging_steps == 0 and step > 0 :
-                current_lr = scheduler.get_last_lr()[0]
-                print('Step : %d \t Loss : %.5f, Learning Rate : %f' %(step, loss, current_lr))
-
-            if step % args.save_steps == 0 and step > 0 :
-                model_path = os.path.join(args.save_path, f'checkpoint-{step}.pt')        
-                torch.save(model.state_dict(), model_path)
-
-
+  
 def seed_everything(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
