@@ -7,17 +7,16 @@ def compute_metrics(predictions, labels) :
     hr_1, hr_5, hr_10 = 0.0, 0.0, 0.0
 
     for i in tqdm(range(len(predictions))) :
-        pred_args = np.argsort(predictions[i])
-
+        pred = predictions[i]
         label = labels[i]
 
-        if label == pred_args[-1] :
+        if label == pred[-1] :
             hr_1 += 1
 
-        if label in pred_args[-5:] :
+        if label in pred[-5:] :
             hr_5 += 1
 
-        if label in pred_args[-10:] :
+        if label in pred[-10:] :
             hr_10 += 1
 
     hr_1 /= len(predictions)

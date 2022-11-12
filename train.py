@@ -202,9 +202,10 @@ def train(args) :
                             country_input=country_input
                         )
 
-                        logits = logits[album_input==special_token_dict['album_mask_token_id']]
-
-                        eval_predictions.extend(logits.detach().cpu().numpy().tolist())
+                        logits = logits[album_input==special_token_dict['album_mask_token_id']].detach().cpu().numpy()
+                        logits = np.argsort(logits, axis=-1)
+                    
+                        eval_predictions.extend(logits.tolist())
                         eval_labels.extend(eval_data['labels'].detach().cpu().numpy().tolist())
                     
                     eval_log = compute_metrics(eval_predictions, eval_labels)
@@ -231,9 +232,10 @@ def train(args) :
                     country_input=country_input
                 )
 
-                logits = logits[album_input==special_token_dict['album_mask_token_id']]
-
-                eval_predictions.extend(logits.detach().cpu().numpy().tolist())
+                logits = logits[album_input==special_token_dict['album_mask_token_id']].detach().cpu().numpy()
+                logits = np.argsort(logits, axis=-1)
+                    
+                eval_predictions.extend(logits.tolist())
                 eval_labels.extend(eval_data['labels'].detach().cpu().numpy().tolist())
             
             eval_log = compute_metrics(eval_predictions, eval_labels)
