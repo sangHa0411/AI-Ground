@@ -190,7 +190,7 @@ class DataCollatorWithPadding :
 
 
     def __call__(self, dataset) :
-        albums, genres, countries = [], [], []
+        ids, albums, genres, countries = [], [], [], []
         genders, ages, pr_interests, ch_interests = [], [], [], []
 
         max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
@@ -200,6 +200,7 @@ class DataCollatorWithPadding :
             labels = []
             for data in dataset :
                 d_id = data['id']
+                ids.append(d_id)
                 genders.append(self.gender_dict[self.profile_gender[d_id]])
                 ages.append(self.age_dict[self.profile_age[d_id]])
                 pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
@@ -230,7 +231,7 @@ class DataCollatorWithPadding :
                     country = country[-max_length:]
                 countries.append(country)
 
-
+            id_tensor = torch.tensor(ids, dtype=torch.int32)
             album_tensor = torch.tensor(albums, dtype=torch.int32)
             genre_tensor = torch.tensor(genres, dtype=torch.int32)
             country_tensor = torch.tensor(countries, dtype=torch.int32)
@@ -242,6 +243,7 @@ class DataCollatorWithPadding :
             ch_interests = torch.tensor(ch_interests, dtype=torch.int32)
 
             batch = {
+                'id' : id_tensor,
                 'album_input' : album_tensor, 
                 'labels' : label_tensor,
                 'genre_input' : genre_tensor,
@@ -257,12 +259,13 @@ class DataCollatorWithPadding :
                 
             for data in dataset :
                 d_id = data['id']
+                ids.append(d_id)
                 genders.append(self.gender_dict[self.profile_gender[d_id]])
                 ages.append(self.age_dict[self.profile_age[d_id]])
                 pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
                 ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
                 
-                album = data['album']
+                album = data['album'] + [self.special_token_dict['album_mask_token_id']]
                 if len(album) < max_length :
                     pad_length = max_length - len(album)
                     album = album + [self.special_token_dict['album_pad_token_id']] * pad_length
@@ -270,7 +273,7 @@ class DataCollatorWithPadding :
                     album = album[-max_length:]
                 albums.append(album)
 
-                genre = data['genre']
+                genre = data['genre'] + [self.special_token_dict['genre_mask_token_id']]
                 if len(genre) < max_length :
                     pad_length = max_length - len(genre)
                     genre = genre + [self.special_token_dict['genre_pad_token_id']] * pad_length
@@ -278,7 +281,7 @@ class DataCollatorWithPadding :
                     genre = genre[-max_length:]
                 genres.append(genre)
 
-                country = data['country']
+                country = data['country'] + [self.special_token_dict['country_mask_token_id']]
                 if len(country) < max_length :
                     pad_length = max_length - len(country)
                     country = country + [self.special_token_dict['country_pad_token_id']] * pad_length
@@ -286,6 +289,7 @@ class DataCollatorWithPadding :
                     country = country[-max_length:]
                 countries.append(country)
 
+            id_tensor = torch.tensor(ids, dtype=torch.int32)
             album_tensor = torch.tensor(albums, dtype=torch.int32)
             genre_tensor = torch.tensor(genres, dtype=torch.int32)
             country_tensor = torch.tensor(countries, dtype=torch.int32)
@@ -296,6 +300,7 @@ class DataCollatorWithPadding :
             ch_interests = torch.tensor(ch_interests, dtype=torch.int32)
 
             batch = {
+                'id' : id_tensor, 
                 'album_input' : album_tensor, 
                 'genre_input' : genre_tensor,
                 'country_input' : country_tensor,

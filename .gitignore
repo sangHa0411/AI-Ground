@@ -1,5 +1,6 @@
 data
 exps
+wandb
 references
 results
 *.ipynb
