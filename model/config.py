@@ -8,6 +8,10 @@ class BertConfig(PretrainedConfig):
         album_size=30000,
         genre_size=30,
         country_size=20,
+        age_size=15,
+        gender_size=2,
+        pr_interest_size=10,
+        ch_interest_size=10,
         hidden_size=64,
         num_hidden_layers=6,
         num_attention_heads=8,
@@ -27,6 +31,10 @@ class BertConfig(PretrainedConfig):
         self.album_size = album_size
         self.genre_size = genre_size
         self.country_size = country_size
+        self.age_size = age_size
+        self.gender_size = gender_size
+        self.pr_interest_size = pr_interest_size
+        self.ch_interest_size = ch_interest_size
         self.hidden_size = hidden_size
         self.num_hidden_layers = num_hidden_layers
         self.num_attention_heads = num_attention_heads

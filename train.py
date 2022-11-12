@@ -39,7 +39,7 @@ def train(args) :
     # -- Preprocess dataset
     df = preprocess(history_data_df, meta_data_df)
     dataset = parse(df)
-
+    
     # -- Model Arguments
     max_album_value = max(df['album_id'].unique())
     max_genre_value = max(df['genre'].unique())
@@ -63,6 +63,10 @@ def train(args) :
         album_size=album_size,
         genre_size=genre_size,
         country_size=country_size,
+        age_size=len(profile_data_df['age'].unique()),
+        gender_size=len(profile_data_df['sex'].unique()),
+        pr_interest_size=len(profile_data_df['pr_interest_keyword_cd_1'].unique()),
+        ch_interest_size=len(profile_data_df['ch_interest_keyword_cd_1'].unique()),
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         max_length=args.max_length,
@@ -75,7 +79,6 @@ def train(args) :
 
     # -- Model
     model = Bert(model_arguments).to(device)
-
 
     if args.do_eval :
 
@@ -158,6 +161,12 @@ def train(args) :
 
             optimizer.zero_grad()
 
+            age_input, gender_input, pr_interest_input, ch_interest_input = data['age'], data['gender'], data['pr_interest'], data['ch_interest']
+            age_input = age_input.long().to(device)
+            gender_input = gender_input.long().to(device)
+            pr_interest_input = pr_interest_input.long().to(device)
+            ch_interest_input = ch_interest_input.long().to(device)
+
             album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
             album_input = album_input.long().to(device)
             genre_input = genre_input.long().to(device)
@@ -166,7 +175,11 @@ def train(args) :
             logits = model(
                 album_input=album_input, 
                 genre_input=genre_input,
-                country_input=country_input
+                country_input=country_input,
+                age_input=age_input,
+                gender_input=gender_input,
+                pr_interest_input=pr_interest_input,
+                ch_interest_input=ch_interest_input
             )
 
             labels = data['labels'].long().to(device)
@@ -185,11 +198,17 @@ def train(args) :
             if step % args.eval_steps == 0 and step > 0 :
 
                 model.eval()
-
+            
                 with torch.no_grad() :
                     print('\nValidation at %d step' %step)
                     eval_predictions, eval_labels = [], []
                     for eval_data in tqdm(eval_data_loader) :
+
+                        age_input, gender_input, pr_interest_input, ch_interest_input = eval_data['age'], eval_data['gender'], eval_data['pr_interest'], eval_data['ch_interest']
+                        age_input = age_input.long().to(device)
+                        gender_input = gender_input.long().to(device)
+                        pr_interest_input = pr_interest_input.long().to(device)
+                        ch_interest_input = ch_interest_input.long().to(device)
 
                         album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
                         album_input = album_input.long().to(device)
@@ -199,7 +218,11 @@ def train(args) :
                         logits = model(
                             album_input=album_input, 
                             genre_input=genre_input,
-                            country_input=country_input
+                            country_input=country_input,
+                            age_input=age_input,
+                            gender_input=gender_input,
+                            pr_interest_input=pr_interest_input,
+                            ch_interest_input=ch_interest_input
                         )
 
                         logits = logits[album_input==special_token_dict['album_mask_token_id']].detach().cpu().numpy()
@@ -215,11 +238,20 @@ def train(args) :
 
                 model.train()
 
+        model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
+        torch.save(model.state_dict(), model_path)
+
         # Evaluation
         model.eval()
         with torch.no_grad() :
             eval_predictions, eval_labels = [], []
             for eval_data in tqdm(eval_data_loader) :
+
+                age_input, gender_input, pr_interest_input, ch_interest_input = eval_data['age'], eval_data['gender'], eval_data['pr_interest'], eval_data['ch_interest']
+                age_input = age_input.long().to(device)
+                gender_input = gender_input.long().to(device)
+                pr_interest_input = pr_interest_input.long().to(device)
+                ch_interest_input = ch_interest_input.long().to(device)
 
                 album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
                 album_input = album_input.long().to(device)
@@ -229,7 +261,11 @@ def train(args) :
                 logits = model(
                     album_input=album_input, 
                     genre_input=genre_input,
-                    country_input=country_input
+                    country_input=country_input,
+                    age_input=age_input,
+                    gender_input=gender_input,
+                    pr_interest_input=pr_interest_input,
+                    ch_interest_input=ch_interest_input
                 )
 
                 logits = logits[album_input==special_token_dict['album_mask_token_id']].detach().cpu().numpy()
@@ -306,6 +342,12 @@ def train(args) :
 
             optimizer.zero_grad()
 
+            age_input, gender_input, pr_interest_input, ch_interest_input = data['age'], data['gender'], data['pr_interest'], data['ch_interest']
+            age_input = age_input.long().to(device)
+            gender_input = gender_input.long().to(device)
+            pr_interest_input = pr_interest_input.long().to(device)
+            ch_interest_input = ch_interest_input.long().to(device)
+
             album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
             album_input = album_input.long().to(device)
             genre_input = genre_input.long().to(device)
@@ -314,8 +356,13 @@ def train(args) :
             logits = model(
                 album_input=album_input, 
                 genre_input=genre_input,
-                country_input=country_input
+                country_input=country_input,
+                age_input=age_input,
+                gender_input=gender_input,
+                pr_interest_input=pr_interest_input,
+                ch_interest_input=ch_interest_input
             )
+
 
             labels = data['labels'].long().to(device)
             loss = loss_fn(logits.view(-1, album_size), labels.view(-1,))

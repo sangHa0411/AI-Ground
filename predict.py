@@ -39,6 +39,7 @@ def train(args) :
     max_genre_value = max(df['genre'].unique())
     max_country_value = max(df['country'].unique())
 
+
     # -- Token dictionary
     special_token_dict = {
         'country_pad_token_id' : max_country_value+1,
@@ -57,6 +58,10 @@ def train(args) :
         album_size=album_size,
         genre_size=genre_size,
         country_size=country_size,
+        age_size=len(profile_data_df['age'].unique()),
+        gender_size=len(profile_data_df['sex'].unique()),
+        pr_interest_size=len(profile_data_df['pr_interest_keyword_cd_1'].unique()),
+        ch_interest_size=len(profile_data_df['ch_interest_keyword_cd_1'].unique()),
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         max_length=args.max_length,
@@ -94,6 +99,13 @@ def train(args) :
         for data in tqdm(data_loader) :
             
             ids = data['id'].detach().cpu().numpy().tolist()
+            
+            age_input, gender_input, pr_interest_input, ch_interest_input = data['age'], data['gender'], data['pr_interest'], data['ch_interest']
+            age_input = age_input.long().to(device)
+            gender_input = gender_input.long().to(device)
+            pr_interest_input = pr_interest_input.long().to(device)
+            ch_interest_input = ch_interest_input.long().to(device)
+
             album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
             album_input = album_input.long().to(device)
             genre_input = genre_input.long().to(device)
@@ -102,7 +114,11 @@ def train(args) :
             logits = model(
                 album_input=album_input, 
                 genre_input=genre_input,
-                country_input=country_input
+                country_input=country_input,
+                age_input=age_input,
+                gender_input=gender_input,
+                pr_interest_input=pr_interest_input,
+                ch_interest_input=ch_interest_input
             )
 
             logits = logits[album_input==special_token_dict['album_mask_token_id']]
