@@ -1,5 +1,6 @@
 
 import os
+import wandb
 import torch
 import random
 import argparse
@@ -14,6 +15,7 @@ from utils.metrics import compute_metrics
 from utils.preprocessor import preprocess, parse
 from utils.collator import DataCollatorWithMasking, DataCollatorWithPadding
 from utils.scheduler import LinearWarmupScheduler
+from dotenv import load_dotenv
 import warnings
 
 def train(args) :
@@ -120,6 +122,29 @@ def train(args) :
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
 
+        load_dotenv(dotenv_path="wandb.env")
+        WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
+        wandb.login(key=WANDB_AUTH_KEY)
+
+        name = f"EP:{args.epochs}_BS:{args.batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
+        wandb.init(
+            entity="sangha0411",
+            project="bert4rec",
+            group=f"ai-ground",
+            name=name
+        )
+
+        training_args = {
+            "epochs": args.epochs, 
+            "total_steps" : total_steps,
+            "warmup_steps" : warmup_steps,
+            "batch_size": args.batch_size, 
+            "learning_rate": args.learning_rate, 
+            "weight_decay": args.weight_decay, 
+        }
+        wandb.config.update(training_args)
+
+
         print('\nTraining')
         for step in tqdm(range(total_steps)) :
 
@@ -151,7 +176,9 @@ def train(args) :
 
             if step % args.logging_steps == 0 and step > 0 :
                 current_lr = scheduler.get_last_lr()[0]
-                print('Step : %d \t Loss : %.5f, Learning Rate : %f' %(step, loss, current_lr))
+                log = {'step' : step, 'loss' : loss, 'lr' : current_lr}
+                wandb.log(log)
+                print(log)
 
             if step % args.eval_steps == 0 and step > 0 :
                 print('\nValidation at %d step' %step)
@@ -175,10 +202,34 @@ def train(args) :
                     eval_labels.extend(eval_data['labels'].detach().cpu().numpy().tolist())
                 
                 eval_log = compute_metrics(eval_predictions, eval_labels)
+                eval_log = {'eval/' + k : v for k, v in eval_log}
+                wandb.log(eval_log)
                 print(eval_log)
 
-                # model_path = os.path.join(args.save_path, f'checkpoint-{step}.pt')        
-                # torch.save(model.state_dict(), model_path)
+        # Evaluation
+        eval_predictions, eval_labels = [], []
+        for eval_data in tqdm(eval_data_loader) :
+
+            album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
+            album_input = album_input.long().to(device)
+            genre_input = genre_input.long().to(device)
+            country_input = country_input.long().to(device)
+
+            logits = model(
+                album_input=album_input, 
+                genre_input=genre_input,
+                country_input=country_input
+            )
+
+            logits = logits[album_input==special_token_dict['album_mask_token_id']]
+
+            eval_predictions.extend(logits.detach().cpu().numpy().tolist())
+            eval_labels.extend(eval_data['labels'].detach().cpu().numpy().tolist())
+        
+        eval_log = compute_metrics(eval_predictions, eval_labels)
+        eval_log = {'eval/' + k : v for k, v in eval_log}
+        wandb.log(eval_log)
+        print(eval_log)
   
 def seed_everything(seed):
     torch.manual_seed(seed)

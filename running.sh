@@ -6,20 +6,20 @@ python train.py --data_dir ./data \
     --do_eval True \
     --learning_rate 1e-4 \
     --weight_decay 1e-3 \
-    --train_batch_size 256 \
+    --train_batch_size 128 \
     --eval_batch_size 32 \
-    --epochs 100 \
+    --epochs 50 \
     --mlm_probability 0.15 \
     --num_workers 4 \
     --logging_steps 100 \
-    --eval_steps 300 \
-    --hidden_size 128 \
+    --eval_steps 500 \
+    --hidden_size 256 \
     --num_layers 6 \
-    --num_head 4 \
-    --intermediate_size 512 \
+    --num_head 8 \
+    --intermediate_size 1024 \
     --dropout_prob 0.1 \
     --warmup_ratio 0.1 \
-    --eps 1e-6 \
+    --eps 1e-8 \
     --save_dir ./exp
     
 

@@ -3,4 +3,5 @@ exps
 references
 results
 *.ipynb
+*.env
 __pycache__
