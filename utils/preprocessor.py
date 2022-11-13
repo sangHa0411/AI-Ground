@@ -59,3 +59,48 @@ def parse(df) :
     )
     parsed_dataset = Dataset.from_pandas(parsed_df)
     return parsed_dataset
+
+
+class Spliter :
+
+    def __init__(self, max_length, leave_probability) :
+        self.max_length = max_length
+        self.leave_probability = leave_probability
+
+    def __call__(self, dataset) :
+
+        labels = []
+        albums, genres, countries = [], [], []
+        
+        org_albums, org_genres, org_countries = dataset['album'], dataset['genre'], dataset['country']
+
+        for i in range(len(org_albums)) :
+            album, genre, country = org_albums[i], org_genres[i], org_countries[i]
+
+            size = len(album)
+            if size > self.max_length :
+                album = album[-self.max_length:]
+                genre = genre[-self.max_length:]
+                country = country[-self.max_length:]
+                size = self.max_length
+
+            remain_size = int(size * (1-self.leave_probability))
+
+            label = album[remain_size:]
+            album, genre, country = album[:remain_size], genre[:remain_size], country[:remain_size]
+
+            albums.append(album)
+            genres.append(genre)
+            countries.append(country)
+
+            labels.append(label)
+
+        dataset['album'] = albums
+        dataset['genre'] = genres
+        dataset['country'] = countries
+        dataset['labels'] = labels
+
+        return dataset
+
+
+

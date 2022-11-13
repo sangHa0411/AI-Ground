@@ -41,8 +41,6 @@ class Bert(nn.Module) :
         country_input,
         age_input,
         gender_input,
-        pr_interest_input,
-        ch_interest_input,
     ) :
 
         mask_token_id = self.config.album_size - 2
@@ -50,10 +48,8 @@ class Bert(nn.Module) :
 
         age_tensor = self.age_embed(age_input)
         gender_tensor = self.gender_embed(gender_input)
-        # pr_interest_tensor = self.pr_interest_embed(pr_interest_input)
-        # ch_interest_tensor = self.ch_interest_embed(ch_interest_input)
 
-        profile_tensor = age_tensor + gender_tensor # torch.cat([age_tensor, gender_tensor, pr_interest_tensor, ch_interest_tensor], dim=-1)
+        profile_tensor = age_tensor + gender_tensor
         profile_tensor = profile_tensor.unsqueeze(1)
 
         album_tensor = self.album_embed(album_input)
@@ -64,7 +60,6 @@ class Bert(nn.Module) :
         attention_mask = torch.where(album_input==mask_token_id, 1.0, 0.0) * (-1e+20)
         attention_mask = attention_mask.view(batch_size, 1, 1, seq_size)
 
-        # input_tensor = album_tensor + torch.cat([genre_tensor, country_tensor], dim=-1) + pos_tensor 
         input_tensor = album_tensor + genre_tensor + country_tensor + pos_tensor 
         sequence_output = self.encoder(
             hidden_states=input_tensor + profile_tensor, 
