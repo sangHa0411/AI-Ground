@@ -1,7 +1,7 @@
 
 import torch
+import numpy as np
 from tqdm import tqdm
-
 
 class DataCollatorWithMasking :
     def __init__(
@@ -12,7 +12,6 @@ class DataCollatorWithMasking :
         mlm=True,
         mlm_probability=0.15,
         label_pad_token_id=-100,
-        eval_flag=True,
     ) : 
         self.build(profile_data)
         self.special_token_dict = special_token_dict
@@ -56,10 +55,7 @@ class DataCollatorWithMasking :
         albums, genres, countries = [], [], []
         genders, ages, pr_interests, ch_interests = [], [], [], []
 
-        if self.eval_flag :
-            max_length = min(self.max_length, max([len(d['album'])-1 for d in dataset]))    
-        else :
-            max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
+        max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
 
         for data in dataset :
             d_id = data['id']
@@ -68,28 +64,20 @@ class DataCollatorWithMasking :
             pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
             ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
 
-            album = data['album'][:-1] if self.eval_flag else data['album']
+            album, genre, country = data['album'], data['genre'], data['country']
+
             if len(album) < max_length :
                 pad_length = max_length - len(album)
-                album = album + [self.special_token_dict['album_pad_token_id']] * pad_length
+                album = [self.special_token_dict['album_pad_token_id']] * pad_length + album
+                genre = [self.special_token_dict['genre_pad_token_id']] * pad_length + genre
+                country = [self.special_token_dict['country_pad_token_id']] * pad_length + country   
             else :
                 album = album[-max_length:]
-            albums.append(album)
-
-            genre = data['genre'][:-1] if self.eval_flag else data['genre']
-            if len(genre) < max_length :
-                pad_length = max_length - len(genre)
-                genre = genre + [self.special_token_dict['genre_pad_token_id']] * pad_length
-            else :
                 genre = genre[-max_length:]
-            genres.append(genre)
-
-            country = data['country'][:-1] if self.eval_flag else data['country']
-            if len(country) < max_length :
-                pad_length = max_length - len(country)
-                country = country + [self.special_token_dict['country_pad_token_id']] * pad_length
-            else :
                 country = country[-max_length:]
+
+            albums.append(album)
+            genres.append(genre)
             countries.append(country)
 
         album_tensor = torch.tensor(albums, dtype=torch.int32)
@@ -206,29 +194,24 @@ class DataCollatorWithPadding :
                 pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
                 ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
 
-                album, label = data['album'][:-1] + [self.special_token_dict['album_mask_token_id']], data['album'][-1]
+                label = data['album'][-1]
+                album = data['album'][:-1] + [self.special_token_dict['album_mask_token_id']]
+                genre = data['genre'][:-1] + [self.special_token_dict['genre_mask_token_id']]
+                country = data['country'][:-1] + [self.special_token_dict['country_mask_token_id']]
+                
                 if len(album) < max_length :
                     pad_length = max_length - len(album)
-                    album = album + [self.special_token_dict['album_pad_token_id']] * pad_length
+                    album = [self.special_token_dict['album_pad_token_id']] * pad_length + album
+                    genre = [self.special_token_dict['genre_pad_token_id']] * pad_length + genre
+                    country = [self.special_token_dict['country_pad_token_id']] * pad_length + country            
                 else :
                     album = album[-max_length:]
+                    genre = genre[-max_length:]
+                    country = country[-max_length:]
+
                 albums.append(album)
                 labels.append(label)
-
-                genre = data['genre'][:-1] + [self.special_token_dict['genre_mask_token_id']]
-                if len(genre) < max_length :
-                    pad_length = max_length - len(genre)
-                    genre = genre + [self.special_token_dict['genre_pad_token_id']] * pad_length
-                else :
-                    genre = genre[-max_length:]
                 genres.append(genre)
-
-                country = data['country'][:-1] + [self.special_token_dict['country_mask_token_id']]
-                if len(country) < max_length :
-                    pad_length = max_length - len(country)
-                    country = country + [self.special_token_dict['country_pad_token_id']] * pad_length
-                else :
-                    country = country[-max_length:]
                 countries.append(country)
 
             id_tensor = torch.tensor(ids, dtype=torch.int32)
@@ -266,27 +249,21 @@ class DataCollatorWithPadding :
                 ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
                 
                 album = data['album'] + [self.special_token_dict['album_mask_token_id']]
+                genre = data['genre'] + [self.special_token_dict['genre_mask_token_id']]
+                country = data['country'] + [self.special_token_dict['country_mask_token_id']]
+
                 if len(album) < max_length :
                     pad_length = max_length - len(album)
-                    album = album + [self.special_token_dict['album_pad_token_id']] * pad_length
+                    album = [self.special_token_dict['album_pad_token_id']] * pad_length + album
+                    genre = [self.special_token_dict['genre_pad_token_id']] * pad_length + genre
+                    country = [self.special_token_dict['country_pad_token_id']] * pad_length + country
                 else :
                     album = album[-max_length:]
-                albums.append(album)
-
-                genre = data['genre'] + [self.special_token_dict['genre_mask_token_id']]
-                if len(genre) < max_length :
-                    pad_length = max_length - len(genre)
-                    genre = genre + [self.special_token_dict['genre_pad_token_id']] * pad_length
-                else :
                     genre = genre[-max_length:]
-                genres.append(genre)
-
-                country = data['country'] + [self.special_token_dict['country_mask_token_id']]
-                if len(country) < max_length :
-                    pad_length = max_length - len(country)
-                    country = country + [self.special_token_dict['country_pad_token_id']] * pad_length
-                else :
                     country = country[-max_length:]
+
+                albums.append(album)
+                genres.append(genre)
                 countries.append(country)
 
             id_tensor = torch.tensor(ids, dtype=torch.int32)

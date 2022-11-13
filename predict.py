@@ -121,8 +121,7 @@ def train(args) :
                 ch_interest_input=ch_interest_input
             )
 
-            logits = logits[album_input==special_token_dict['album_mask_token_id']]
-            logits = logits.detach().cpu().numpy()
+            logits = logits[:, -1, :].detach().cpu().numpy()
             pred_args = np.argsort(logits, axis=-1)
 
             for i, p in zip(ids, pred_args) :
