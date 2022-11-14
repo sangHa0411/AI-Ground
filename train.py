@@ -59,14 +59,12 @@ def train(args) :
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
 
-    model_arguments = BertConfig(
+    model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
         country_size=country_size,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
-        pr_interest_size=len(profile_data_df['pr_interest_keyword_cd_1'].unique()),
-        ch_interest_size=len(profile_data_df['ch_interest_keyword_cd_1'].unique()),
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         max_length=args.max_length,
@@ -78,11 +76,13 @@ def train(args) :
     )
 
     # -- Model
-    model = Bert(model_arguments).to(device)
+    num_labels = max_album_value + 1
+    model_config.num_labels = num_labels
+    model = Bert(model_config).to(device)
 
     if args.do_eval :
     
-        spliter = Spliter(max_length=250, leave_probability=0.1)
+        spliter = Spliter(max_length=250, leave_probability=args.leave_probability)
         dataset = dataset.map(spliter, batched=True)
 
         # -- Train Data Collator
@@ -121,34 +121,34 @@ def train(args) :
 
         # -- Training
         train_data_iterator = iter(train_data_loader)
-        total_steps = len(train_data_loader) * args.epochs
+        total_steps = len(train_data_loader) * args.epochs if args.max_steps == -1 else args.max_steps
         warmup_steps = int(total_steps * args.warmup_ratio)
 
         loss_fn = nn.CrossEntropyLoss().to(device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
 
-        # load_dotenv(dotenv_path="wandb.env")
-        # WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
-        # wandb.login(key=WANDB_AUTH_KEY)
+        load_dotenv(dotenv_path="wandb.env")
+        WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
+        wandb.login(key=WANDB_AUTH_KEY)
 
-        # name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
-        # wandb.init(
-        #     entity="sangha0411",
-        #     project="bert4rec",
-        #     group=f"ai-ground",
-        #     name=name
-        # )
+        name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
+        wandb.init(
+            entity="sangha0411",
+            project="bert4rec",
+            group=f"ai-ground",
+            name=name
+        )
 
-        # training_args = {
-        #     "epochs": args.epochs, 
-        #     "total_steps" : total_steps,
-        #     "warmup_steps" : warmup_steps,
-        #     "batch_size": args.train_batch_size, 
-        #     "learning_rate": args.learning_rate, 
-        #     "weight_decay": args.weight_decay, 
-        # }
-        # wandb.config.update(training_args)
+        training_args = {
+            "epochs": args.epochs, 
+            "total_steps" : total_steps,
+            "warmup_steps" : warmup_steps,
+            "batch_size": args.train_batch_size, 
+            "learning_rate": args.learning_rate, 
+            "weight_decay": args.weight_decay, 
+        }
+        wandb.config.update(training_args)
 
         print('\nTraining')
         for step in tqdm(range(total_steps)) :
@@ -179,7 +179,7 @@ def train(args) :
             )
 
             labels = data['labels'].long().to(device)
-            loss = loss_fn(logits.view(-1, album_size), labels.view(-1,))
+            loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
             
             loss.backward()
             optimizer.step()
@@ -188,7 +188,7 @@ def train(args) :
             if step % args.logging_steps == 0 and step > 0 :
                 current_lr = scheduler.get_last_lr()[0]
                 log = {'train/step' : step, 'train/loss' : loss.item(), 'train/lr' : current_lr}
-                # wandb.log(log)
+                wandb.log(log)
                 print(log)
 
             if step % args.eval_steps == 0 and step > 0 :
@@ -225,13 +225,10 @@ def train(args) :
 
                     eval_log = compute_metrics(eval_predictions, eval_labels)
                     eval_log = {'eval/' + k : v for k, v in eval_log.items()}
-                    # wandb.log(eval_log)
+                    wandb.log(eval_log)
                     print(eval_log)
 
                 model.train()
-
-        model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
-        torch.save(model.state_dict(), model_path)
 
         # Evaluation
         model.eval()
@@ -260,14 +257,14 @@ def train(args) :
                 logits = np.argsort(-logits, axis=-1)
                 
                 eval_predictions.extend(logits.tolist())
-                eval_labels.extend(eval_data['labels'].detach().cpu().numpy().tolist())
+                eval_labels.extend(eval_data['labels'])
             
             eval_log = compute_metrics(eval_predictions, eval_labels)
             eval_log = {'eval/' + k : v for k, v in eval_log.items()}
-            # wandb.log(eval_log)
+            wandb.log(eval_log)
             print(eval_log)
     
-        # wandb.finish()
+        wandb.finish()
 
     else :
 
@@ -291,34 +288,34 @@ def train(args) :
 
         # -- Training
         train_data_iterator = iter(train_data_loader)
-        total_steps = len(train_data_loader) * args.epochs
+        total_steps = len(train_data_loader) * args.epochs if args.max_steps == -1 else args.max_steps
         warmup_steps = int(total_steps * args.warmup_ratio)
 
         loss_fn = nn.CrossEntropyLoss().to(device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
 
-        # load_dotenv(dotenv_path="wandb.env")
-        # WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
-        # wandb.login(key=WANDB_AUTH_KEY)
+        load_dotenv(dotenv_path="wandb.env")
+        WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
+        wandb.login(key=WANDB_AUTH_KEY)
 
-        # name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
-        # wandb.init(
-        #     entity="sangha0411",
-        #     project="bert4rec",
-        #     group=f"ai-ground",
-        #     name=name
-        # )
+        name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
+        wandb.init(
+            entity="sangha0411",
+            project="bert4rec",
+            group=f"ai-ground",
+            name=name
+        )
 
-        # training_args = {
-        #     "epochs": args.epochs, 
-        #     "total_steps" : total_steps,
-        #     "warmup_steps" : warmup_steps,
-        #     "batch_size": args.train_batch_size, 
-        #     "learning_rate": args.learning_rate, 
-        #     "weight_decay": args.weight_decay, 
-        # }
-        # wandb.config.update(training_args)
+        training_args = {
+            "epochs": args.epochs, 
+            "total_steps" : total_steps,
+            "warmup_steps" : warmup_steps,
+            "batch_size": args.train_batch_size, 
+            "learning_rate": args.learning_rate, 
+            "weight_decay": args.weight_decay, 
+        }
+        wandb.config.update(training_args)
 
         print('\nTraining')
         for step in tqdm(range(total_steps)) :
@@ -349,7 +346,7 @@ def train(args) :
             )
 
             labels = data['labels'].long().to(device)
-            loss = loss_fn(logits.view(-1, album_size), labels.view(-1,))
+            loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
             
             loss.backward()
             optimizer.step()
@@ -358,7 +355,7 @@ def train(args) :
             if step % args.logging_steps == 0 and step > 0 :
                 current_lr = scheduler.get_last_lr()[0]
                 log = {'train/step' : step, 'train/loss' : loss.item(), 'train/lr' : current_lr}
-                # wandb.log(log)
+                wandb.log(log)
                 print(log)
             
             if step % args.save_steps == 0 and step > 0 :
@@ -368,7 +365,7 @@ def train(args) :
         model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
         torch.save(model.state_dict(), model_path)
 
-        # wandb.finish()
+        wandb.finish()
 
 def seed_everything(seed):
     torch.manual_seed(seed)
@@ -431,7 +428,11 @@ if __name__ == '__main__':
         default=10,
         help='epochs to training'
     )
-    parser.add_argument('--eval_ratio', type=float,
+    parser.add_argument('--max_steps', type=int,
+        default=-1,
+        help='max steps to training'
+    )
+    parser.add_argument('--leave_probability', type=float,
         default=0.2,
         help='validation_ratio'
     )

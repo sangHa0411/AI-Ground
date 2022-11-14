@@ -1,29 +1,82 @@
 # Training with Evaluation
+
+## Model 1
 python train.py --data_dir ./data \
     --meta_data_file meta_data.csv \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
-    --max_length 100 \
+    --max_length 50 \
     --do_eval True \
-    --learning_rate 1e-3 \
+    --learning_rate 1e-4 \
     --weight_decay 1e-3 \
     --train_batch_size 128 \
     --eval_batch_size 32 \
-    --epochs 100 \
-    --eval_ratio 0.2 \
-    --mlm_probability 0.2 \
-    --num_workers 6 \
+    --epochs 50 \
+    --mlm_probability 0.4 \
     --logging_steps 100 \
-    --eval_steps 300 \
-    --hidden_size 256 \
-    --num_layers 3 \
-    --num_head 4 \
-    --intermediate_size 1024 \
+    --eval_steps 500 \
+    --hidden_size 768 \
+    --num_layers 12 \
+    --num_head 8 \
+    --num_workers 3 \
+    --intermediate_size 3072 \
     --dropout_prob 0.1 \
-    --warmup_ratio 0.00 \
-    --eps 1e-8 \
+    --warmup_ratio 0.1 \
+    --eps 1e-12 \
+    --save_dir ./exps
+
+## Model 2
+python train.py --data_dir ./data \
+    --meta_data_file meta_data.csv \
+    --profile_data_file profile_data.csv \
+    --history_data_file history_data.csv \
+    --max_length 50 \
+    --do_eval True \
+    --learning_rate 1.2e-4 \
+    --weight_decay 1e-2 \
+    --train_batch_size 128 \
+    --eval_batch_size 32 \
+    --max_steps 2600 \
+    --mlm_probability 0.4 \
+    --logging_steps 100 \
+    --eval_steps 500 \
+    --hidden_size 768 \
+    --num_layers 12 \
+    --num_head 8 \
+    --num_workers 3 \
+    --intermediate_size 3072 \
+    --dropout_prob 0.1 \
+    --warmup_ratio 0.1 \
+    --eps 1e-12 \
     --save_dir ./exps
     
+
+## Model 3
+python train.py --data_dir ./data \
+    --meta_data_file meta_data.csv \
+    --profile_data_file profile_data.csv \
+    --history_data_file history_data.csv \
+    --max_length 50 \
+    --do_eval True \
+    --learning_rate 5e-5 \
+    --weight_decay 1e-2 \
+    --train_batch_size 128 \
+    --eval_batch_size 32 \
+    --epochs 50 \
+    --max_steps 4000 \
+    --mlm_probability 0.4 \
+    --logging_steps 100 \
+    --eval_steps 500 \
+    --hidden_size 768 \
+    --num_layers 12 \
+    --num_head 8 \
+    --num_workers 3 \
+    --intermediate_size 3072 \
+    --dropout_prob 0.1 \
+    --warmup_ratio 0.1 \
+    --eps 1e-12 \
+    --save_dir ./exps
+
 
 # Full Training
 rm -rf ./exps/*
@@ -31,22 +84,22 @@ python train.py --data_dir ./data \
     --meta_data_file meta_data.csv \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
-    --max_length 100 \
-    --learning_rate 1e-3 \
+    --max_length 50 \
+    --learning_rate 1e-4 \
     --weight_decay 1e-3 \
     --train_batch_size 128 \
-    --epochs 80 \
+    --epochs 50 \
+    --mlm_probability 0.4 \
     --save_steps 500 \
-    --mlm_probability 0.2 \
-    --num_workers 6 \
     --logging_steps 100 \
-    --hidden_size 256 \
-    --num_layers 3 \
-    --num_head 4 \
-    --intermediate_size 1024 \
+    --hidden_size 768 \
+    --num_layers 12 \
+    --num_head 8 \
+    --num_workers 3 \
+    --intermediate_size 3072 \
     --dropout_prob 0.1 \
-    --warmup_ratio 0.00 \
-    --eps 1e-8 \
+    --warmup_ratio 0.1 \
+    --eps 1e-12 \
     --save_dir ./exps
 
 
@@ -56,15 +109,14 @@ python predict.py  --data_dir ./data \
     --submission_file sample_submission.csv \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
-    --max_length 100 \
+    --max_length 50 \
     --eval_batch_size 32 \
     --model_path exps/checkpoint-3250.pt \
-    --num_workers 6 \
-    --hidden_size 256 \
-    --num_layers 3 \
-    --num_head 4 \
-    --intermediate_size 1024 \
+    --num_workers 3 \
+    --hidden_size 768 \
+    --num_layers 12 \
+    --num_head 8 \
+    --intermediate_size 3072 \
     --dropout_prob 0.1 \
-    --warmup_ratio 0.1 \
-    --eps 1e-8 \
-    --output_file ./results/2022_11_13_3.csv
+    --eps 1e-12 \
+    --output_file ./results/2022_11_15_0.csv

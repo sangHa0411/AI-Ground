@@ -15,6 +15,8 @@ from utils.preprocessor import preprocess, parse
 from utils.collator import DataCollatorWithPadding
 import warnings
 
+TOPK = 25
+
 def train(args) :
 
     # -- Ignore Warnings
@@ -54,14 +56,12 @@ def train(args) :
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
 
-    model_arguments = BertConfig(
+    model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
         country_size=country_size,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
-        pr_interest_size=len(profile_data_df['pr_interest_keyword_cd_1'].unique()),
-        ch_interest_size=len(profile_data_df['ch_interest_keyword_cd_1'].unique()),
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         max_length=args.max_length,
@@ -73,7 +73,9 @@ def train(args) :
     )
 
     # -- Model
-    model = Bert(model_arguments).to(device)
+    num_labels = max_album_value + 1
+    model_config.num_labels = num_labels
+    model = Bert(model_config).to(device)
     model.load_state_dict(torch.load(args.model_path, map_location=cuda_str))
 
     # -- Data Collator
@@ -81,7 +83,6 @@ def train(args) :
         profile_data=profile_data_df, 
         special_token_dict=special_token_dict,
         max_length=args.max_length,
-        eval_flag=False,
     )
 
     # -- Loader 
@@ -100,11 +101,9 @@ def train(args) :
             
             ids = data['id'].detach().cpu().numpy().tolist()
             
-            age_input, gender_input, pr_interest_input, ch_interest_input = data['age'], data['gender'], data['pr_interest'], data['ch_interest']
+            age_input, gender_input = data['age'], data['gender']
             age_input = age_input.long().to(device)
             gender_input = gender_input.long().to(device)
-            pr_interest_input = pr_interest_input.long().to(device)
-            ch_interest_input = ch_interest_input.long().to(device)
 
             album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
             album_input = album_input.long().to(device)
@@ -117,15 +116,13 @@ def train(args) :
                 country_input=country_input,
                 age_input=age_input,
                 gender_input=gender_input,
-                pr_interest_input=pr_interest_input,
-                ch_interest_input=ch_interest_input
             )
 
             logits = logits[:, -1, :].detach().cpu().numpy()
-            pred_args = np.argsort(logits, axis=-1)
+            pred_args = np.argsort(-logits, axis=-1)
 
             for i, p in zip(ids, pred_args) :
-                predictions[i] = p[::-1][:25]
+                predictions[i] = p[:TOPK]
 
     submission_df = pd.read_csv(os.path.join(args.data_dir, args.submission_file))
     submission_predictions = []

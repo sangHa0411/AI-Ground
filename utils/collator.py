@@ -26,7 +26,7 @@ class DataCollatorWithMasking :
         profile_gender, profile_age = {}, {}
         
         for i in tqdm(range(len(profile_data))) :
-            p_id, gender, age = profile_data.iloc[i][['profile_id', 'sex', 'age', ]]
+            p_id, gender, age = profile_data.iloc[i][['profile_id', 'sex', 'age']]
             profile_gender[p_id] = gender
             profile_age[p_id] = age
 
