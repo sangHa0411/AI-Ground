@@ -11,8 +11,11 @@ class Bert(nn.Module) :
         self.config = config
         self.encoder = BertEncoder(config)
 
-        self.position_embed = nn.Parameter(torch.normal(mean=0.0, std=0.01, 
-            size=(config.max_length, config.hidden_size)), 
+        self.position_embed = nn.Parameter(
+            torch.normal(
+                mean=0.0, 
+                std=0.01, 
+                size=(config.max_length, config.hidden_size)), 
             requires_grad=True
         )
 
@@ -23,7 +26,7 @@ class Bert(nn.Module) :
         self.genre_embed = nn.Embedding(config.genre_size, config.hidden_size)
         self.country_embed = nn.Embedding(config.country_size, config.hidden_size)
         
-        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         self.classification_head = nn.Linear(config.hidden_size, config.num_labels)
@@ -66,7 +69,7 @@ class Bert(nn.Module) :
         attention_mask = attention_mask.view(batch_size, 1, 1, seq_size)
 
         input_tensor = album_tensor + genre_tensor + country_tensor + pos_tensor 
-        input_tensor = self.LayerNorm(input_tensor)
+        input_tensor = self.layernorm(input_tensor)
         input_tensor = self.dropout(input_tensor)
 
         sequence_output = self.encoder(

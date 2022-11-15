@@ -11,11 +11,10 @@ from tqdm import tqdm
 from model.model import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
-from utils.metrics import compute_metrics
 from utils.preprocessor import Spliter, preprocess, parse
 from utils.collator import DataCollatorWithMasking, DataCollatorWithPadding
-from utils.scheduler import LinearWarmupScheduler
-from dotenv import load_dotenv
+from trainer import Trainer
+
 import warnings
 
 def train(args) :
@@ -23,7 +22,6 @@ def train(args) :
     # -- Ignore Warnings
     warnings.filterwarnings('ignore')
 
-    # -- Device
     cuda_flag = torch.cuda.is_available()
     device = torch.device("cuda" if cuda_flag else "cpu")
     print("\nDevice:", device)
@@ -78,7 +76,7 @@ def train(args) :
     # -- Model
     num_labels = max_album_value + 1
     model_config.num_labels = num_labels
-    model = Bert(model_config).to(device)
+    model = Bert(model_config)
 
     if args.do_eval :
     
@@ -94,13 +92,6 @@ def train(args) :
             mlm_probability=args.mlm_probability,
         )
 
-        # -- Eval Data Collator
-        eval_data_collator = DataCollatorWithPadding(
-            profile_data=profile_data_df, 
-            special_token_dict=special_token_dict,
-            max_length=args.max_length,
-        )
-
         # -- Data Loader 
         train_data_loader = DataLoader(
             dataset, 
@@ -108,6 +99,13 @@ def train(args) :
             shuffle=True,
             num_workers=args.num_workers,
             collate_fn=train_data_collator
+        )
+
+        # -- Eval Data Collator
+        eval_data_collator = DataCollatorWithPadding(
+            profile_data=profile_data_df, 
+            special_token_dict=special_token_dict,
+            max_length=args.max_length,
         )
 
         # -- Data Loader 
@@ -119,152 +117,8 @@ def train(args) :
             collate_fn=eval_data_collator
         )
 
-        # -- Training
-        train_data_iterator = iter(train_data_loader)
-        total_steps = len(train_data_loader) * args.epochs if args.max_steps == -1 else args.max_steps
-        warmup_steps = int(total_steps * args.warmup_ratio)
-
-        loss_fn = nn.CrossEntropyLoss().to(device)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-        scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
-
-        load_dotenv(dotenv_path="wandb.env")
-        WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
-        wandb.login(key=WANDB_AUTH_KEY)
-
-        name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
-        wandb.init(
-            entity="sangha0411",
-            project="bert4rec",
-            group=f"ai-ground",
-            name=name
-        )
-
-        training_args = {
-            "epochs": args.epochs, 
-            "total_steps" : total_steps,
-            "warmup_steps" : warmup_steps,
-            "batch_size": args.train_batch_size, 
-            "learning_rate": args.learning_rate, 
-            "weight_decay": args.weight_decay, 
-        }
-        wandb.config.update(training_args)
-
-        print('\nTraining')
-        for step in tqdm(range(total_steps)) :
-
-            try :
-                data = next(train_data_iterator)
-            except StopIteration :
-                train_data_iterator = iter(train_data_loader)
-                data = next(train_data_iterator)
-
-            optimizer.zero_grad()
-
-            age_input, gender_input = data['age'], data['gender']
-            age_input = age_input.long().to(device)
-            gender_input = gender_input.long().to(device)
-
-            album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
-            album_input = album_input.long().to(device)
-            genre_input = genre_input.long().to(device)
-            country_input = country_input.long().to(device)
-
-            logits = model(
-                album_input=album_input, 
-                genre_input=genre_input,
-                country_input=country_input,
-                age_input=age_input,
-                gender_input=gender_input,
-            )
-
-            labels = data['labels'].long().to(device)
-            loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
-            
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-
-            if step % args.logging_steps == 0 and step > 0 :
-                current_lr = scheduler.get_last_lr()[0]
-                log = {'train/step' : step, 'train/loss' : loss.item(), 'train/lr' : current_lr}
-                wandb.log(log)
-                print(log)
-
-            if step % args.eval_steps == 0 and step > 0 :
-
-                model.eval()
-            
-                with torch.no_grad() :
-                    print('\nValidation at %d step' %step)
-                    eval_predictions, eval_labels = [], []
-                    for eval_data in tqdm(eval_data_loader) :
-
-                        age_input, gender_input = eval_data['age'], eval_data['gender']
-                        age_input = age_input.long().to(device)
-                        gender_input = gender_input.long().to(device)
-
-                        album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
-                        album_input = album_input.long().to(device)
-                        genre_input = genre_input.long().to(device)
-                        country_input = country_input.long().to(device)
-
-                        logits = model(
-                            album_input=album_input, 
-                            genre_input=genre_input,
-                            country_input=country_input,
-                            age_input=age_input,
-                            gender_input=gender_input,
-                        )
-
-                        logits = logits[:,-1,:].detach().cpu().numpy()
-                        logits = np.argsort(-logits, axis=-1)
-                        
-                        eval_predictions.extend(logits.tolist())
-                        eval_labels.extend(eval_data['labels'])
-
-                    eval_log = compute_metrics(eval_predictions, eval_labels)
-                    eval_log = {'eval/' + k : v for k, v in eval_log.items()}
-                    wandb.log(eval_log)
-                    print(eval_log)
-
-                model.train()
-
-        # Evaluation
-        model.eval()
-        with torch.no_grad() :
-            eval_predictions, eval_labels = [], []
-            for eval_data in tqdm(eval_data_loader) :
-
-                age_input, gender_input = eval_data['age'], eval_data['gender']
-                age_input = age_input.long().to(device)
-                gender_input = gender_input.long().to(device)
-
-                album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
-                album_input = album_input.long().to(device)
-                genre_input = genre_input.long().to(device)
-                country_input = country_input.long().to(device)
-
-                logits = model(
-                    album_input=album_input, 
-                    genre_input=genre_input,
-                    country_input=country_input,
-                    age_input=age_input,
-                    gender_input=gender_input,
-                )
-
-                logits = logits[:,-1,:].detach().cpu().numpy()
-                logits = np.argsort(-logits, axis=-1)
-                
-                eval_predictions.extend(logits.tolist())
-                eval_labels.extend(eval_data['labels'])
-            
-            eval_log = compute_metrics(eval_predictions, eval_labels)
-            eval_log = {'eval/' + k : v for k, v in eval_log.items()}
-            wandb.log(eval_log)
-            print(eval_log)
-    
-        wandb.finish()
+        trainer = Trainer(args, model, device, train_data_loader, eval_data_loader)
+        trainer.train()
 
     else :
 
@@ -285,87 +139,11 @@ def train(args) :
             num_workers=args.num_workers,
             collate_fn=train_data_collator
         )
-
-        # -- Training
-        train_data_iterator = iter(train_data_loader)
-        total_steps = len(train_data_loader) * args.epochs if args.max_steps == -1 else args.max_steps
-        warmup_steps = int(total_steps * args.warmup_ratio)
-
-        loss_fn = nn.CrossEntropyLoss().to(device)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
-        scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
-
-        load_dotenv(dotenv_path="wandb.env")
-        WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
-        wandb.login(key=WANDB_AUTH_KEY)
-
-        name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
-        wandb.init(
-            entity="sangha0411",
-            project="bert4rec",
-            group=f"ai-ground",
-            name=name
-        )
-
-        training_args = {
-            "epochs": args.epochs, 
-            "total_steps" : total_steps,
-            "warmup_steps" : warmup_steps,
-            "batch_size": args.train_batch_size, 
-            "learning_rate": args.learning_rate, 
-            "weight_decay": args.weight_decay, 
-        }
-        wandb.config.update(training_args)
-
-        print('\nTraining')
-        for step in tqdm(range(total_steps)) :
-
-            try :
-                data = next(train_data_iterator)
-            except StopIteration :
-                train_data_iterator = iter(train_data_loader)
-                data = next(train_data_iterator)
-
-            optimizer.zero_grad()
-
-            age_input, gender_input = data['age'], data['gender']
-            age_input = age_input.long().to(device)
-            gender_input = gender_input.long().to(device)
-
-            album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
-            album_input = album_input.long().to(device)
-            genre_input = genre_input.long().to(device)
-            country_input = country_input.long().to(device)
-
-            logits = model(
-                album_input=album_input, 
-                genre_input=genre_input,
-                country_input=country_input,
-                age_input=age_input,
-                gender_input=gender_input,
-            )
-
-            labels = data['labels'].long().to(device)
-            loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
             
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+        trainer = Trainer(args, model, device, train_data_loader)
+        trainer.train()
 
-            if step % args.logging_steps == 0 and step > 0 :
-                current_lr = scheduler.get_last_lr()[0]
-                log = {'train/step' : step, 'train/loss' : loss.item(), 'train/lr' : current_lr}
-                wandb.log(log)
-                print(log)
-            
-            if step % args.save_steps == 0 and step > 0 :
-                model_path = os.path.join(args.save_dir, f'checkpoint-{step}.pt')        
-                torch.save(model.state_dict(), model_path)
-  
-        model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
-        torch.save(model.state_dict(), model_path)
-
-        wandb.finish()
+ 
 
 def seed_everything(seed):
     torch.manual_seed(seed)
