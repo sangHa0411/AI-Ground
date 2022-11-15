@@ -20,29 +20,40 @@ class DataCollatorWithMasking :
         self.mlm_probability = mlm_probability
         self.label_pad_token_id = label_pad_token_id
 
-
+    
     def build(self, profile_data) :
 
-        profile_gender, profile_age = {}, {}
+        profile_gender, profile_age, profile_pr_interest, profile_ch_interest = {}, {}, {}, {}
         
         for i in tqdm(range(len(profile_data))) :
-            p_id, gender, age = profile_data.iloc[i][['profile_id', 'sex', 'age']]
+            p_id, gender, age, pr_interest, ch_interest = profile_data.iloc[i][
+                ['profile_id', 'sex', 'age', 'pr_interest_keyword_cd_1', 'ch_interest_keyword_cd_1']
+            ]
             profile_gender[p_id] = gender
             profile_age[p_id] = age
+            profile_pr_interest[p_id] = pr_interest
+            profile_ch_interest[p_id] = ch_interest
 
         gender_dict = {s:i for i,s in enumerate(sorted(profile_data['sex'].unique()))}
         age_dict = {s:i for i,s in enumerate(sorted(profile_data['age'].unique()))}
+        pr_interest_dict = {s:i for i,s in enumerate(sorted(profile_data['pr_interest_keyword_cd_1'].unique()))}
+        ch_interest_dict = {s:i for i,s in enumerate(sorted(profile_data['ch_interest_keyword_cd_1'].unique()))}
 
         self.profile_gender = profile_gender
         self.profile_age = profile_age
+        self.profile_pr_interest = profile_pr_interest
+        self.profile_ch_interest = profile_ch_interest
         
         self.gender_dict = gender_dict
         self.age_dict = age_dict
+        self.pr_interest_dict = pr_interest_dict
+        self.ch_interest_dict = ch_interest_dict
+
 
 
     def __call__(self, dataset) :
         albums, genres, countries = [], [], []
-        genders, ages = [], []
+        genders, ages, pr_interests, ch_interests = [], [], [], []
 
         max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
 
@@ -50,6 +61,8 @@ class DataCollatorWithMasking :
             d_id = data['id']
             genders.append(self.gender_dict[self.profile_gender[d_id]])
             ages.append(self.age_dict[self.profile_age[d_id]])
+            pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
+            ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
 
             album, genre, country = data['album'], data['genre'], data['country']
 
@@ -73,6 +86,8 @@ class DataCollatorWithMasking :
         
         genders = torch.tensor(genders, dtype=torch.int32)
         ages = torch.tensor(ages, dtype=torch.int32)
+        pr_interests = torch.tensor(pr_interests, dtype=torch.int32)
+        ch_interests = torch.tensor(ch_interests, dtype=torch.int32)
 
         album_tensor, genre_tensor, country_tensor, label_tensor = self.torch_mask(
             album_tensor,
@@ -87,7 +102,9 @@ class DataCollatorWithMasking :
             'genre_input' : genre_tensor,
             'country_input' : country_tensor,
             'gender' : genders,
-            'age' : ages
+            'age' : ages,
+            'pr_interest' : pr_interests,
+            'ch_interest' : ch_interests
         }
         return batch
 
@@ -129,28 +146,40 @@ class DataCollatorWithPadding :
         self.special_token_dict = special_token_dict
         self.max_length = max_length
 
+
     def build(self, profile_data) :
 
-        profile_gender, profile_age = {}, {}
+        profile_gender, profile_age, profile_pr_interest, profile_ch_interest = {}, {}, {}, {}
         
         for i in tqdm(range(len(profile_data))) :
-            p_id, gender, age = profile_data.iloc[i][['profile_id', 'sex', 'age', ]]
+            p_id, gender, age, pr_interest, ch_interest = profile_data.iloc[i][
+                ['profile_id', 'sex', 'age', 'pr_interest_keyword_cd_1', 'ch_interest_keyword_cd_1']
+            ]
             profile_gender[p_id] = gender
             profile_age[p_id] = age
+            profile_pr_interest[p_id] = pr_interest
+            profile_ch_interest[p_id] = ch_interest
 
         gender_dict = {s:i for i,s in enumerate(sorted(profile_data['sex'].unique()))}
         age_dict = {s:i for i,s in enumerate(sorted(profile_data['age'].unique()))}
+        pr_interest_dict = {s:i for i,s in enumerate(sorted(profile_data['pr_interest_keyword_cd_1'].unique()))}
+        ch_interest_dict = {s:i for i,s in enumerate(sorted(profile_data['ch_interest_keyword_cd_1'].unique()))}
 
         self.profile_gender = profile_gender
         self.profile_age = profile_age
+        self.profile_pr_interest = profile_pr_interest
+        self.profile_ch_interest = profile_ch_interest
         
         self.gender_dict = gender_dict
         self.age_dict = age_dict
+        self.pr_interest_dict = pr_interest_dict
+        self.ch_interest_dict = ch_interest_dict
+
 
 
     def __call__(self, dataset) :
         ids, albums, genres, countries = [], [], [], []
-        genders, ages = [], []
+        genders, ages, pr_interests, ch_interests = [], [], [], []
 
         labels = []
         max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
@@ -160,7 +189,9 @@ class DataCollatorWithPadding :
             ids.append(d_id)
             genders.append(self.gender_dict[self.profile_gender[d_id]])
             ages.append(self.age_dict[self.profile_age[d_id]])
-            
+            pr_interests.append(self.pr_interest_dict[self.profile_pr_interest[d_id]])
+            ch_interests.append(self.ch_interest_dict[self.profile_ch_interest[d_id]])
+
             album = data['album'] + [self.special_token_dict['album_mask_token_id']]
             genre = data['genre'] + [self.special_token_dict['genre_mask_token_id']]
             country = data['country'] + [self.special_token_dict['country_mask_token_id']]
@@ -189,6 +220,8 @@ class DataCollatorWithPadding :
 
         genders = torch.tensor(genders, dtype=torch.int32)
         ages = torch.tensor(ages, dtype=torch.int32)
+        pr_interests = torch.tensor(pr_interests, dtype=torch.int32)
+        ch_interests = torch.tensor(ch_interests, dtype=torch.int32)
 
         batch = {
             'id' : id_tensor, 
@@ -197,6 +230,8 @@ class DataCollatorWithPadding :
             'country_input' : country_tensor,
             'gender' : genders,
             'age' : ages,
+            'pr_interest' : pr_interests,
+            'ch_interest' : ch_interests
         }
 
         if len(labels) > 0 :

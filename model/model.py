@@ -19,9 +19,13 @@ class Bert(nn.Module) :
             requires_grad=True
         )
 
+        # Profile Embedding
         self.age_embed = nn.Embedding(config.age_size, config.hidden_size)
         self.gender_embed = nn.Embedding(config.gender_size, config.hidden_size)
+        self.pr_interest_embed = nn.Embedding(config.pr_interest_size, config.hidden_size)
+        self.ch_interest_embed = nn.Embedding(config.ch_interest_size, config.hidden_size)
 
+        # Album Sequence Embedding
         self.album_embed = nn.Embedding(config.album_size, config.hidden_size)
         self.genre_embed = nn.Embedding(config.genre_size, config.hidden_size)
         self.country_embed = nn.Embedding(config.country_size, config.hidden_size)
@@ -49,25 +53,33 @@ class Bert(nn.Module) :
         country_input,
         age_input,
         gender_input,
+        pr_interest_input,
+        ch_interest_input,
     ) :
 
         mask_token_id = self.config.album_size - 2
         batch_size, seq_size = album_input.shape
 
+        # Profile 
         age_tensor = self.age_embed(age_input)
         gender_tensor = self.gender_embed(gender_input)
+        pr_interest_tensor = self.pr_interest_embed(pr_interest_input)
+        ch_interest_tensor = self.ch_interest_embed(ch_interest_input)
 
-        profile_tensor = age_tensor + gender_tensor
+        profile_tensor = age_tensor + gender_tensor + pr_interest_tensor + ch_interest_tensor
         profile_tensor = profile_tensor.unsqueeze(1)
 
+        # Album Sequence
         album_tensor = self.album_embed(album_input)
         genre_tensor = self.genre_embed(genre_input)
         country_tensor = self.country_embed(country_input)
 
+        # Positional Embedding and Attention Mask
         pos_tensor = self.position_embed[:seq_size, :]
         attention_mask = torch.where(album_input==mask_token_id, 1.0, 0.0) * (-1e+20)
         attention_mask = attention_mask.view(batch_size, 1, 1, seq_size)
 
+        # Bert Input Tensor
         input_tensor = album_tensor + genre_tensor + country_tensor + pos_tensor 
         input_tensor = self.layernorm(input_tensor)
         input_tensor = self.dropout(input_tensor)
@@ -77,6 +89,7 @@ class Bert(nn.Module) :
             attention_mask=attention_mask
         )[0]
 
+        # Bert Output Tensor
         sequence_output = self.dropout(sequence_output)
         logits = self.classification_head(sequence_output)
         return logits

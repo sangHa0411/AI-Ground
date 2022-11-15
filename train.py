@@ -63,6 +63,8 @@ def train(args) :
         country_size=country_size,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
+        pr_interest_size=len(profile_data_df['pr_interest_keyword_cd_1'].unique()),
+        ch_interest_size=len(profile_data_df['ch_interest_keyword_cd_1'].unique()),
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         max_length=args.max_length,

@@ -72,9 +72,11 @@ class Trainer :
 
             optimizer.zero_grad()
 
-            age_input, gender_input = data['age'], data['gender']
+            age_input, gender_input, pr_interest_input, ch_interest_input = data['age'], data['gender'], data['pr_interest'], data['ch_interest']
             age_input = age_input.long().to(self.device)
             gender_input = gender_input.long().to(self.device)
+            pr_interest_input = pr_interest_input.long().to(self.device)
+            ch_interest_input = ch_interest_input.long().to(self.device)
 
             album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
             album_input = album_input.long().to(self.device)
@@ -87,6 +89,8 @@ class Trainer :
                 country_input=country_input,
                 age_input=age_input,
                 gender_input=gender_input,
+                pr_interest_input=pr_interest_input,
+                ch_interest_input=ch_interest_input
             )
 
             labels = data['labels'].long().to(self.device)
@@ -111,7 +115,7 @@ class Trainer :
         if args.do_eval == False :
             model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
             torch.save(self.model.state_dict(), model_path)
-            
+
         wandb.finish()
 
     def evaluate(self) :
@@ -122,9 +126,11 @@ class Trainer :
             eval_predictions, eval_labels = [], []
             for eval_data in tqdm(self.eval_dataloader) :
 
-                age_input, gender_input = eval_data['age'], eval_data['gender']
+                age_input, gender_input, pr_interest_input, ch_interest_input = eval_data['age'], eval_data['gender'], eval_data['pr_interest'], eval_data['ch_interest']
                 age_input = age_input.long().to(self.device)
                 gender_input = gender_input.long().to(self.device)
+                pr_interest_input = pr_interest_input.long().to(self.device)
+                ch_interest_input = ch_interest_input.long().to(self.device)
 
                 album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
                 album_input = album_input.long().to(self.device)
@@ -137,6 +143,8 @@ class Trainer :
                     country_input=country_input,
                     age_input=age_input,
                     gender_input=gender_input,
+                    pr_interest_input=pr_interest_input,
+                    ch_interest_input=ch_interest_input
                 )
 
                 logits = logits[:,-1,:].detach().cpu().numpy()
