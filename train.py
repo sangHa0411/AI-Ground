@@ -37,6 +37,7 @@ def train(args) :
     # -- Preprocess dataset
     df = preprocess(history_data_df, meta_data_df)
     dataset = parse(df)
+    print(dataset)
     
     # -- Model Arguments
     max_album_value = max(df['album_id'].unique())
@@ -52,7 +53,7 @@ def train(args) :
         'album_pad_token_id' : max_album_value+1,
         'album_mask_token_id' : max_album_value+2,
     }
-
+    
     album_size = max_album_value + 3
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
@@ -63,8 +64,6 @@ def train(args) :
         country_size=country_size,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
-        pr_interest_size=len(profile_data_df['pr_interest_keyword_cd_1'].unique()),
-        ch_interest_size=len(profile_data_df['ch_interest_keyword_cd_1'].unique()),
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_layers,
         max_length=args.max_length,
@@ -83,7 +82,7 @@ def train(args) :
     if args.do_eval :
     
         spliter = Spliter(max_length=250, leave_probability=args.leave_probability)
-        dataset = dataset.map(spliter, batched=True)
+        dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
 
         # -- Train Data Collator
         train_data_collator = DataCollatorWithMasking(
@@ -99,7 +98,7 @@ def train(args) :
             dataset, 
             batch_size=args.train_batch_size, 
             shuffle=True,
-            num_workers=args.num_workers,
+            # num_workers=args.num_workers,
             collate_fn=train_data_collator
         )
 
@@ -115,7 +114,7 @@ def train(args) :
             dataset, 
             batch_size=args.eval_batch_size, 
             shuffle=False,
-            num_workers=args.num_workers,
+            # num_workers=args.num_workers,
             collate_fn=eval_data_collator
         )
 

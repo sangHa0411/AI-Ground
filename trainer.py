@@ -4,6 +4,7 @@ import wandb
 import torch
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm
 from dotenv import load_dotenv
 from utils.metrics import compute_metrics
@@ -72,16 +73,22 @@ class Trainer :
 
             optimizer.zero_grad()
 
-            age_input, gender_input, pr_interest_input, ch_interest_input = data['age'], data['gender'], data['pr_interest'], data['ch_interest']
+            age_input, gender_input = data['age'], data['gender']
             age_input = age_input.long().to(self.device)
             gender_input = gender_input.long().to(self.device)
-            pr_interest_input = pr_interest_input.long().to(self.device)
-            ch_interest_input = ch_interest_input.long().to(self.device)
 
             album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
             album_input = album_input.long().to(self.device)
             genre_input = genre_input.long().to(self.device)
             country_input = country_input.long().to(self.device)
+
+            # R-Drop Loss
+            # age_input = torch.cat([age_input, age_input], dim=0)
+            # gender_input = torch.cat([gender_input, gender_input], dim=0)
+
+            # album_input = torch.cat([album_input, album_input], dim=0)
+            # genre_input = torch.cat([genre_input, genre_input], dim=0)
+            # country_input = torch.cat([country_input, country_input], dim=0)
 
             logits = self.model(
                 album_input=album_input, 
@@ -89,13 +96,12 @@ class Trainer :
                 country_input=country_input,
                 age_input=age_input,
                 gender_input=gender_input,
-                pr_interest_input=pr_interest_input,
-                ch_interest_input=ch_interest_input
             )
 
             labels = data['labels'].long().to(self.device)
             loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
-            
+            # loss = self.compute_loss(logits, labels)
+
             loss.backward()
             optimizer.step()
             scheduler.step()
@@ -110,12 +116,17 @@ class Trainer :
                 if step % args.eval_steps == 0 and step > 0 :
                     print('\nValidation at %d step' %step)
                     self.evaluate()
+            else :
+                if step % args.save_steps == 0 and step > 0 :
+                    model_path = os.path.join(args.save_dir, f'checkpoint-{step}.pt')        
+                    torch.save(self.model.state_dict(), model_path)
 
-        self.evaluate()
-        if args.do_eval == False :
+        if args.do_eval :
+            self.evaluate()
+        else :
             model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
             torch.save(self.model.state_dict(), model_path)
-
+            
         wandb.finish()
 
     def evaluate(self) :
@@ -126,11 +137,9 @@ class Trainer :
             eval_predictions, eval_labels = [], []
             for eval_data in tqdm(self.eval_dataloader) :
 
-                age_input, gender_input, pr_interest_input, ch_interest_input = eval_data['age'], eval_data['gender'], eval_data['pr_interest'], eval_data['ch_interest']
+                age_input, gender_input = eval_data['age'], eval_data['gender']
                 age_input = age_input.long().to(self.device)
                 gender_input = gender_input.long().to(self.device)
-                pr_interest_input = pr_interest_input.long().to(self.device)
-                ch_interest_input = ch_interest_input.long().to(self.device)
 
                 album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
                 album_input = album_input.long().to(self.device)
@@ -143,8 +152,6 @@ class Trainer :
                     country_input=country_input,
                     age_input=age_input,
                     gender_input=gender_input,
-                    pr_interest_input=pr_interest_input,
-                    ch_interest_input=ch_interest_input
                 )
 
                 logits = logits[:,-1,:].detach().cpu().numpy()
@@ -159,3 +166,27 @@ class Trainer :
             print(eval_log)
 
         self.model.train()
+
+
+    def compute_loss(self, logits, labels):
+
+        batch_size = labels.shape[0]
+        num_labels = self.model.config.num_labels
+
+        sub_logits_1 = logits[:batch_size, :, :]
+        sub_logits_2 = logits[batch_size:, :, :]
+
+        loss_fn = nn.CrossEntropyLoss().to(self.device)
+        loss_nll = (
+            loss_fn(sub_logits_1.view(-1, num_labels), labels.view(-1)) + \
+            loss_fn(sub_logits_2.view(-1, num_labels), labels.view(-1))
+        )
+        
+        loss_kl = self.get_kl_loss(sub_logits_1, sub_logits_2)
+        return loss_nll + loss_kl
+
+    def get_kl_loss(self, logits_1, logits_2, alpha=1.0) :
+        loss_fn = nn.KLDivLoss(reduction='batchmean').to(self.device)
+        loss_kl_1 = loss_fn(F.log_softmax(logits_1, dim=-1), F.softmax(logits_2, dim=-1))
+        loss_kl_2 = loss_fn(F.log_softmax(logits_2, dim=-1), F.softmax(logits_1, dim=-1))
+        return alpha * (loss_kl_1 + loss_kl_2)
