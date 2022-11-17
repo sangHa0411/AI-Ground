@@ -60,7 +60,6 @@ def parse(df) :
     parsed_dataset = Dataset.from_pandas(parsed_df)
     return parsed_dataset
 
-
 class Spliter :
 
     def __init__(self, max_length, leave_probability) :
@@ -101,6 +100,4 @@ class Spliter :
         dataset['labels'] = labels
 
         return dataset
-
-
 

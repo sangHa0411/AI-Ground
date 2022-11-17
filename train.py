@@ -1,13 +1,10 @@
 
 import os
-import wandb
 import torch
 import random
 import argparse
 import numpy as np
 import pandas as pd
-import torch.nn as nn
-from tqdm import tqdm
 from model.model import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
@@ -98,7 +95,7 @@ def train(args) :
             dataset, 
             batch_size=args.train_batch_size, 
             shuffle=True,
-            # num_workers=args.num_workers,
+            num_workers=args.num_workers,
             collate_fn=train_data_collator
         )
 
@@ -114,7 +111,7 @@ def train(args) :
             dataset, 
             batch_size=args.eval_batch_size, 
             shuffle=False,
-            # num_workers=args.num_workers,
+            num_workers=args.num_workers,
             collate_fn=eval_data_collator
         )
 

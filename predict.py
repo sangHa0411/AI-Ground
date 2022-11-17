@@ -1,12 +1,9 @@
 
 import os
-import wandb
 import torch
-import random
 import argparse
 import numpy as np
 import pandas as pd
-import torch.nn as nn
 from tqdm import tqdm
 from model.model import Bert
 from model.config import BertConfig

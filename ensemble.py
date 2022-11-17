@@ -16,9 +16,9 @@ import warnings
 TOPK = 25
 ENSEMBLE_SIZE = 3
 MODEL_PATHS = [
-    'exps/seed42/checkpoint-3250.pt',
-    'exps/seed1234/checkpoint-2600.pt',
-    'exps/seed95/checkpoint-4000.pt',
+    'exps/seed42/checkpoint-3000.pt',
+    'exps/seed1234/checkpoint-3000.pt',
+    'exps/seed95/checkpoint-3000.pt',
     ]
 
 def train(args) :
