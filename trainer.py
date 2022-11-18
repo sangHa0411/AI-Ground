@@ -61,7 +61,7 @@ class Trainer :
         wandb.config.update(training_args)
 
         self.model.to(self.device)
-        num_labels = self.model.config.num_labels
+        vocab_size = self.model.config.vocab_size
 
         for step in tqdm(range(total_steps)) :
 
@@ -82,14 +82,6 @@ class Trainer :
             genre_input = genre_input.long().to(self.device)
             country_input = country_input.long().to(self.device)
 
-            # R-Drop Loss
-            # age_input = torch.cat([age_input, age_input], dim=0)
-            # gender_input = torch.cat([gender_input, gender_input], dim=0)
-
-            # album_input = torch.cat([album_input, album_input], dim=0)
-            # genre_input = torch.cat([genre_input, genre_input], dim=0)
-            # country_input = torch.cat([country_input, country_input], dim=0)
-
             logits = self.model(
                 album_input=album_input, 
                 genre_input=genre_input,
@@ -99,8 +91,7 @@ class Trainer :
             )
 
             labels = data['labels'].long().to(self.device)
-            loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
-            # loss = self.compute_loss(logits, labels)
+            loss = loss_fn(logits.view(-1, vocab_size), labels.view(-1,))
 
             loss.backward()
             optimizer.step()
@@ -166,27 +157,3 @@ class Trainer :
             print(eval_log)
 
         self.model.train()
-
-
-    def compute_loss(self, logits, labels):
-
-        batch_size = labels.shape[0]
-        num_labels = self.model.config.num_labels
-
-        sub_logits_1 = logits[:batch_size, :, :]
-        sub_logits_2 = logits[batch_size:, :, :]
-
-        loss_fn = nn.CrossEntropyLoss().to(self.device)
-        loss_nll = (
-            loss_fn(sub_logits_1.view(-1, num_labels), labels.view(-1)) + \
-            loss_fn(sub_logits_2.view(-1, num_labels), labels.view(-1))
-        )
-        
-        loss_kl = self.get_kl_loss(sub_logits_1, sub_logits_2)
-        return loss_nll + loss_kl
-
-    def get_kl_loss(self, logits_1, logits_2, alpha=1.0) :
-        loss_fn = nn.KLDivLoss(reduction='batchmean').to(self.device)
-        loss_kl_1 = loss_fn(F.log_softmax(logits_1, dim=-1), F.softmax(logits_2, dim=-1))
-        loss_kl_2 = loss_fn(F.log_softmax(logits_2, dim=-1), F.softmax(logits_1, dim=-1))
-        return alpha * (loss_kl_1 + loss_kl_2)

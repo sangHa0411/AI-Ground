@@ -73,12 +73,12 @@ def train(args) :
 
     # -- Model
     num_labels = max_album_value + 1
-    model_config.num_labels = num_labels
+    model_config.vocab_size = num_labels
     model = Bert(model_config)
 
     if args.do_eval :
     
-        spliter = Spliter(max_length=250, leave_probability=args.leave_probability)
+        spliter = Spliter(leave_probability=args.leave_probability)
         dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
 
         # -- Train Data Collator

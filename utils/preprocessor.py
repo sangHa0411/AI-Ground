@@ -37,12 +37,36 @@ def preprocess(history_data, meta_data) :
     return df
 
 
+def filter(df) :
+
+    org_albums = list(df['album_id'])
+
+    flags = [True]
+    albums = [org_albums[0]]
+
+    i = 1
+    while i < len(org_albums) :
+
+        if org_albums[i] != albums[-1] :
+            albums.append(org_albums[i])
+            flags.append(True)
+        else :
+            flags.append(False)
+
+        i += 1
+
+    df = df[flags]
+    df = df.reset_index(drop=True)
+    return df
+
+
 def parse(df) :
     profile_ids = list(df['profile_id'].unique())
 
     d_ids, d_albums, d_genres, d_countries = [], [], [], []
     for p in tqdm(profile_ids) :
         sub_df = df[df['profile_id'] == p]
+        sub_df = filter(sub_df)
 
         d_ids.append(p)
         d_albums.append(list(sub_df['album_id']))
@@ -60,30 +84,21 @@ def parse(df) :
     parsed_dataset = Dataset.from_pandas(parsed_df)
     return parsed_dataset
 
+
 class Spliter :
 
-    def __init__(self, max_length, leave_probability) :
-        self.max_length = max_length
+    def __init__(self, leave_probability) :
         self.leave_probability = leave_probability
 
     def __call__(self, dataset) :
 
         labels = []
         albums, genres, countries = [], [], []
-        
         org_albums, org_genres, org_countries = dataset['album'], dataset['genre'], dataset['country']
 
         for i in range(len(org_albums)) :
             album, genre, country = org_albums[i], org_genres[i], org_countries[i]
-
-            size = len(album)
-            if size > self.max_length :
-                album = album[-self.max_length:]
-                genre = genre[-self.max_length:]
-                country = country[-self.max_length:]
-                size = self.max_length
-
-            remain_size = int(size * (1-self.leave_probability))
+            remain_size = int(len(album) * (1-self.leave_probability))
 
             label = album[remain_size:]
             album, genre, country = album[:remain_size], genre[:remain_size], country[:remain_size]
