@@ -37,36 +37,12 @@ def preprocess(history_data, meta_data) :
     return df
 
 
-def filter(df) :
-
-    org_albums = list(df['album_id'])
-
-    flags = [True]
-    albums = [org_albums[0]]
-
-    i = 1
-    while i < len(org_albums) :
-
-        if org_albums[i] != albums[-1] :
-            albums.append(org_albums[i])
-            flags.append(True)
-        else :
-            flags.append(False)
-
-        i += 1
-
-    df = df[flags]
-    df = df.reset_index(drop=True)
-    return df
-
-
 def parse(df) :
     profile_ids = list(df['profile_id'].unique())
 
     d_ids, d_albums, d_genres, d_countries = [], [], [], []
     for p in tqdm(profile_ids) :
         sub_df = df[df['profile_id'] == p]
-        sub_df = filter(sub_df)
 
         d_ids.append(p)
         d_albums.append(list(sub_df['album_id']))
@@ -98,16 +74,22 @@ class Spliter :
 
         for i in range(len(org_albums)) :
             album, genre, country = org_albums[i], org_genres[i], org_countries[i]
-            remain_size = int(len(album) * (1-self.leave_probability))
+        
+            if len(album) == 1 :
+                albums.append(album)
+                genres.append(genre)
+                countries.append(country)
+                labels.append([])
+            else :
+                remain_size = int(len(album) * (1-self.leave_probability))
 
-            label = album[remain_size:]
-            album, genre, country = album[:remain_size], genre[:remain_size], country[:remain_size]
+                label = album[remain_size:]
+                album, genre, country = album[:remain_size], genre[:remain_size], country[:remain_size]
 
-            albums.append(album)
-            genres.append(genre)
-            countries.append(country)
-
-            labels.append(label)
+                albums.append(album)
+                genres.append(genre)
+                countries.append(country)
+                labels.append(label)
 
         dataset['album'] = albums
         dataset['genre'] = genres

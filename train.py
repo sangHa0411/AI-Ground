@@ -5,6 +5,7 @@ import random
 import argparse
 import numpy as np
 import pandas as pd
+import copy 
 from model.model import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
@@ -81,6 +82,13 @@ def train(args) :
         spliter = Spliter(leave_probability=args.leave_probability)
         dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
 
+        train_dataset = dataset 
+        print(train_dataset)
+
+        eval_dataset = copy.deepcopy(dataset)
+        eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0)
+        print(eval_dataset)
+
         # -- Train Data Collator
         train_data_collator = DataCollatorWithMasking(
             profile_data=profile_data_df, 
@@ -92,7 +100,7 @@ def train(args) :
 
         # -- Data Loader 
         train_data_loader = DataLoader(
-            dataset, 
+            train_dataset, 
             batch_size=args.train_batch_size, 
             shuffle=True,
             num_workers=args.num_workers,
@@ -108,7 +116,7 @@ def train(args) :
 
         # -- Data Loader 
         eval_data_loader = DataLoader(
-            dataset, 
+            eval_dataset, 
             batch_size=args.eval_batch_size, 
             shuffle=False,
             num_workers=args.num_workers,
@@ -119,6 +127,8 @@ def train(args) :
         trainer.train()
 
     else :
+
+        print(dataset)
 
         # -- Train Data Collator
         train_data_collator = DataCollatorWithMasking(
@@ -151,6 +161,7 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = False
     np.random.seed(seed)
     random.seed(seed)
+
 
 if __name__ == '__main__':
 

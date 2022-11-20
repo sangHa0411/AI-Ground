@@ -4,7 +4,6 @@ import wandb
 import torch
 import numpy as np
 import torch.nn as nn
-import torch.nn.functional as F
 from tqdm import tqdm
 from dotenv import load_dotenv
 from utils.metrics import compute_metrics

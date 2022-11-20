@@ -14,11 +14,13 @@ from utils.collator import DataCollatorWithPadding
 import warnings
 
 TOPK = 25
-ENSEMBLE_SIZE = 3
+ENSEMBLE_SIZE = 5
 MODEL_PATHS = [
-    'exps/seed42/checkpoint-3000.pt',
-    'exps/seed1234/checkpoint-3000.pt',
-    'exps/seed95/checkpoint-3000.pt',
+    'exps/seed1/checkpoint-3250.pt',
+    'exps/seed2/checkpoint-3250.pt',
+    'exps/seed3/checkpoint-3250.pt',
+    'exps/seed4/checkpoint-3250.pt',
+    'exps/seed5/checkpoint-3250.pt',
     ]
 
 def train(args) :
@@ -86,7 +88,7 @@ def train(args) :
 
     # -- Model
     num_labels = max_album_value + 1
-    model_config.num_labels = num_labels
+    model_config.vocab_size = num_labels
 
     prediction_logits = []
     for i in range(ENSEMBLE_SIZE) :    

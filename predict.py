@@ -71,7 +71,7 @@ def train(args) :
 
     # -- Model
     num_labels = max_album_value + 1
-    model_config.num_labels = num_labels
+    model_config.vocab_size = num_labels
     model = Bert(model_config).to(device)
     model.load_state_dict(torch.load(args.model_path, map_location=cuda_str))
 

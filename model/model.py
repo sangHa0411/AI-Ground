@@ -11,6 +11,7 @@ class Bert(nn.Module) :
         self.config = config
         self.encoder = BertEncoder(config)
 
+        # Position Embedding
         self.position_embed = nn.Parameter(
             torch.normal(
                 mean=0.0, 
@@ -31,10 +32,11 @@ class Bert(nn.Module) :
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
+        # Dropouts
         self.dropouts = nn.ModuleList([nn.Dropout(config.classifier_dropout) for _ in range(5)])
         
         # Classification
-        self.classification_head = nn.Linear(config.hidden_size, config.num_labels, bias=False)
+        self.classification_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.apply(self._init_weights)
         
 
@@ -94,6 +96,4 @@ class Bert(nn.Module) :
                 logits += self.classification_head(self.dropouts[i](sequence_output))
 
         logits /= len(self.dropouts)
-        # sequence_output = self.dropout(sequence_output)
-        # logits = self.classification_head(sequence_output)
         return logits
