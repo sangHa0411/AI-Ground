@@ -8,7 +8,8 @@ from tqdm import tqdm
 from model.model import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
-from utils.preprocessor import preprocess, parse
+from utils.loader import load_history, load_meta
+from utils.preprocessor import parse
 from utils.collator import DataCollatorWithPadding
 import warnings
 
@@ -28,16 +29,20 @@ def train(args) :
     history_data_df = pd.read_csv(os.path.join(args.data_dir, args.history_data_file), encoding='utf-8')
     profile_data_df = pd.read_csv(os.path.join(args.data_dir, args.profile_data_file), encoding='utf-8')
     meta_data_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_file), encoding='utf-8')
+    meta_data_plus_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_plus_file), encoding='utf-8')
 
     # -- Preprocess dataset
-    df = preprocess(history_data_df, meta_data_df)
-    dataset = parse(df)
+    history_df = load_history(history_data_df, meta_data_df)
+    album_keywords, max_keyword_value = load_meta(meta_data_df, meta_data_plus_df, args.keyword_max_length)
+
+    # -- Preprocess dataset
+    dataset = parse(history_df, album_keywords)
+    print(dataset)
 
     # -- Model Arguments
-    max_album_value = max(df['album_id'].unique())
-    max_genre_value = max(df['genre'].unique())
-    max_country_value = max(df['country'].unique())
-
+    max_album_value = max(history_df['album_id'].unique())
+    max_genre_value = max(history_df['genre'].unique())
+    max_country_value = max(history_df['country'].unique())
 
     # -- Token dictionary
     special_token_dict = {
@@ -47,16 +52,20 @@ def train(args) :
         'genre_mask_token_id' : max_genre_value+2,
         'album_pad_token_id' : max_album_value+1,
         'album_mask_token_id' : max_album_value+2,
+        'keyword_pad_token_id' : max_keyword_value+1,
+        'keyword_mask_token_id' : max_keyword_value+2,
     }
 
     album_size = max_album_value + 3
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
+    keyword_size = max_keyword_value + 3
 
     model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
         country_size=country_size,
+        keyword_size=keyword_size,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
         hidden_size=args.hidden_size,
@@ -69,9 +78,10 @@ def train(args) :
         max_position_embeddings=args.max_length,
     )
 
+
     # -- Model
     num_labels = max_album_value + 1
-    model_config.vocab_size = num_labels
+    model_config.num_labels = num_labels
     model = Bert(model_config).to(device)
     model.load_state_dict(torch.load(args.model_path, map_location=cuda_str))
 
@@ -80,6 +90,7 @@ def train(args) :
         profile_data=profile_data_df, 
         special_token_dict=special_token_dict,
         max_length=args.max_length,
+        keyword_max_length=args.keyword_max_length,
     )
 
     # -- Loader 
@@ -102,15 +113,17 @@ def train(args) :
             age_input = age_input.long().to(device)
             gender_input = gender_input.long().to(device)
 
-            album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
+            album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
             album_input = album_input.long().to(device)
             genre_input = genre_input.long().to(device)
             country_input = country_input.long().to(device)
+            keyword_input = keyword_input.long().to(device)
 
             logits = model(
                 album_input=album_input, 
                 genre_input=genre_input,
                 country_input=country_input,
+                keyword_input=keyword_input,
                 age_input=age_input,
                 gender_input=gender_input,
             )
@@ -157,6 +170,10 @@ if __name__ == '__main__':
     parser.add_argument('--max_length', type=int,
         default=256,
         help='max length of albums'
+    )
+    parser.add_argument('--keyword_max_length', type=int,
+        default=10,
+        help='max length of album keywords'
     )
     parser.add_argument('--eval_batch_size', type=int,
         default=16,

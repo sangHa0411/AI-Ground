@@ -92,8 +92,8 @@ class DataCollatorWithMasking :
             self.special_token_dict
         )
 
-        # genders = torch.cat([genders, genders], dim=0)
-        # ages = torch.cat([ages, ages], dim=0)
+        genders = torch.cat([genders, genders], dim=0)
+        ages = torch.cat([ages, ages], dim=0)
     
         batch = {
             'album_input' : album_tensor, 
@@ -115,19 +115,20 @@ class DataCollatorWithMasking :
         speical_token_dict, 
     ) :
 
-        # batch_size = album_tensor.shape[0]
+        batch_size = album_tensor.shape[0]
 
-        # album_tensor = torch.cat([album_tensor, album_tensor], dim=0)
-        # genre_tensor = torch.cat([genre_tensor, genre_tensor], dim=0)
-        # country_tensor = torch.cat([country_tensor, country_tensor], dim=0)
+        album_tensor = torch.cat([album_tensor, album_tensor], dim=0)
+        genre_tensor = torch.cat([genre_tensor, genre_tensor], dim=0)
+        country_tensor = torch.cat([country_tensor, country_tensor], dim=0)
+        keyword_tensor = torch.cat([keyword_tensor, keyword_tensor], dim=0)
 
         label_tensor = album_tensor.clone()
         pad_token_id = speical_token_dict['album_pad_token_id']
         
         probability_matrix = torch.full(label_tensor.shape, self.mlm_probability)
-        # for i in range(batch_size, len(label_tensor)) :
-        #     probability_matrix[i][:-1] = 0.0
-        #     probability_matrix[i][-1] = 1.0
+        for i in range(batch_size, len(label_tensor)) :
+            probability_matrix[i][:-1] = 0.0
+            probability_matrix[i][-1] = 1.0
         
         probability_matrix = torch.where(
             label_tensor == pad_token_id, 0.0, self.mlm_probability

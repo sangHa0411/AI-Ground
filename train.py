@@ -113,7 +113,7 @@ def train(args) :
             train_dataset, 
             batch_size=args.train_batch_size, 
             shuffle=True,
-            # num_workers=args.num_workers,
+            num_workers=args.num_workers,
             collate_fn=train_data_collator
         )
 
@@ -130,7 +130,7 @@ def train(args) :
             eval_dataset, 
             batch_size=args.eval_batch_size, 
             shuffle=False,
-            # num_workers=args.num_workers,
+            num_workers=args.num_workers,
             collate_fn=eval_data_collator
         )
 
