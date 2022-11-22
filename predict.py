@@ -151,6 +151,10 @@ if __name__ == '__main__':
         default='meta_data.csv',
         help='metadata csv file'
     )
+    parser.add_argument('--meta_data_plus_file', type=str,
+        default='meta_data_plus.csv',
+        help='metadata csv file'
+    )
     parser.add_argument('--profile_data_file', type=str,
         default='profile_data.csv',
         help='profile data csv file'

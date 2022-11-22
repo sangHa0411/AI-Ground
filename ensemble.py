@@ -15,13 +15,13 @@ from utils.collator import DataCollatorWithPadding
 import warnings
 
 TOPK = 25
-ENSEMBLE_SIZE = 5
+ENSEMBLE_SIZE = 3
 MODEL_PATHS = [
-    'exps/seed1/checkpoint-3250.pt',
-    'exps/seed2/checkpoint-3250.pt',
-    'exps/seed3/checkpoint-3250.pt',
-    'exps/seed4/checkpoint-3250.pt',
-    'exps/seed5/checkpoint-3250.pt',
+    'exps/seed1/checkpoint-2800.pt',
+    'exps/seed2/checkpoint-2800.pt',
+    'exps/seed3/checkpoint-2800.pt',
+    'exps/seed4/checkpoint-2800.pt',
+    'exps/seed5/checkpoint-2800.pt',
     ]
 
 def train(args) :
@@ -172,6 +172,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Upsage - (Ai Ground)')
     parser.add_argument('--meta_data_file', type=str,
         default='meta_data.csv',
+        help='metadata csv file'
+    )
+    parser.add_argument('--meta_data_plus_file', type=str,
+        default='meta_data_plus.csv',
         help='metadata csv file'
     )
     parser.add_argument('--profile_data_file', type=str,
