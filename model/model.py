@@ -24,6 +24,13 @@ class Bert(nn.Module) :
         self.age_embed = nn.Embedding(config.age_size, config.hidden_size)
         self.gender_embed = nn.Embedding(config.gender_size, config.hidden_size)
 
+        # Keyword
+        self.keyword_embed = nn.Embedding(config.keyword_size, config.hidden_size)
+        self.keyword_zero_tensor = nn.Parameter(
+            torch.zeros(config.hidden_size),
+            requires_grad=False
+        )
+
         # Album Sequence
         self.album_embed = nn.Embedding(config.album_size, config.hidden_size)
         self.genre_embed = nn.Embedding(config.genre_size, config.hidden_size)
@@ -36,7 +43,7 @@ class Bert(nn.Module) :
         self.dropouts = nn.ModuleList([nn.Dropout(config.classifier_dropout) for _ in range(5)])
         
         # Classification
-        self.classification_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self.classification_head = nn.Linear(config.hidden_size, config.num_labels, bias=False)
         self.apply(self._init_weights)
         
 
@@ -54,6 +61,7 @@ class Bert(nn.Module) :
         album_input, 
         genre_input, 
         country_input,
+        keyword_input,
         age_input,
         gender_input,
     ) :
@@ -68,6 +76,16 @@ class Bert(nn.Module) :
         profile_tensor = age_tensor + gender_tensor
         profile_tensor = profile_tensor.unsqueeze(1)
 
+        # Keyword
+        keyword_pad_token_id = self.config.keyword_size - 2
+
+        keyword_tensor = self.keyword_embed(keyword_input)
+        keyword_length = torch.sum(keyword_input!=keyword_pad_token_id, dim=-1) + 1e-6
+
+        keyword_tensor[keyword_input==keyword_pad_token_id] = self.keyword_zero_tensor
+        keyword_tensor = torch.sum(keyword_tensor, dim=2)
+        keyword_tensor = keyword_tensor / keyword_length.unsqueeze(-1)
+
         # Album Sequence
         album_tensor = self.album_embed(album_input)
         genre_tensor = self.genre_embed(genre_input)
@@ -79,7 +97,7 @@ class Bert(nn.Module) :
         attention_mask = attention_mask.view(batch_size, 1, 1, seq_size)
 
         # Input Tensor
-        input_tensor = album_tensor + genre_tensor + country_tensor + pos_tensor
+        input_tensor = album_tensor + genre_tensor + country_tensor + keyword_tensor + pos_tensor
         input_tensor = self.layernorm(input_tensor)
         input_tensor = self.dropout(input_tensor)
         

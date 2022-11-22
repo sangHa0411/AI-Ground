@@ -9,7 +9,8 @@ import copy
 from model.model import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
-from utils.preprocessor import Spliter, preprocess, parse
+from utils.loader import load_history, load_meta
+from utils.preprocessor import Spliter, parse
 from utils.collator import DataCollatorWithMasking, DataCollatorWithPadding
 from trainer import Trainer
 
@@ -31,16 +32,20 @@ def train(args) :
     history_data_df = pd.read_csv(os.path.join(args.data_dir, args.history_data_file), encoding='utf-8')
     profile_data_df = pd.read_csv(os.path.join(args.data_dir, args.profile_data_file), encoding='utf-8')
     meta_data_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_file), encoding='utf-8')
+    meta_data_plus_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_plus_file), encoding='utf-8')
 
     # -- Preprocess dataset
-    df = preprocess(history_data_df, meta_data_df)
-    dataset = parse(df)
+    history_df = load_history(history_data_df, meta_data_df)
+    album_keywords, max_keyword_value = load_meta(meta_data_df, meta_data_plus_df, args.keyword_max_length)
+
+    # -- Preprocess dataset
+    dataset = parse(history_df, album_keywords)
     print(dataset)
     
     # -- Model Arguments
-    max_album_value = max(df['album_id'].unique())
-    max_genre_value = max(df['genre'].unique())
-    max_country_value = max(df['country'].unique())
+    max_album_value = max(history_df['album_id'].unique())
+    max_genre_value = max(history_df['genre'].unique())
+    max_country_value = max(history_df['country'].unique())
 
     # -- Token dictionary
     special_token_dict = {
@@ -50,16 +55,20 @@ def train(args) :
         'genre_mask_token_id' : max_genre_value+2,
         'album_pad_token_id' : max_album_value+1,
         'album_mask_token_id' : max_album_value+2,
+        'keyword_pad_token_id' : max_keyword_value+1,
+        'keyword_mask_token_id' : max_keyword_value+2,
     }
     
     album_size = max_album_value + 3
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
+    keyword_size = max_keyword_value + 3
 
     model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
         country_size=country_size,
+        keyword_size=keyword_size,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
         hidden_size=args.hidden_size,
@@ -74,7 +83,7 @@ def train(args) :
 
     # -- Model
     num_labels = max_album_value + 1
-    model_config.vocab_size = num_labels
+    model_config.num_labels = num_labels
     model = Bert(model_config)
 
     if args.do_eval :
@@ -94,6 +103,7 @@ def train(args) :
             profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
+            keyword_max_length=args.keyword_max_length,
             mlm=True,
             mlm_probability=args.mlm_probability,
         )
@@ -103,7 +113,7 @@ def train(args) :
             train_dataset, 
             batch_size=args.train_batch_size, 
             shuffle=True,
-            num_workers=args.num_workers,
+            # num_workers=args.num_workers,
             collate_fn=train_data_collator
         )
 
@@ -112,6 +122,7 @@ def train(args) :
             profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
+            keyword_max_length=args.keyword_max_length,
         )
 
         # -- Data Loader 
@@ -119,7 +130,7 @@ def train(args) :
             eval_dataset, 
             batch_size=args.eval_batch_size, 
             shuffle=False,
-            num_workers=args.num_workers,
+            # num_workers=args.num_workers,
             collate_fn=eval_data_collator
         )
 
@@ -135,6 +146,7 @@ def train(args) :
             profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
+            keyword_max_length=args.keyword_max_length,
             mlm=True,
             mlm_probability=args.mlm_probability,
         )
@@ -183,6 +195,10 @@ if __name__ == '__main__':
         default='meta_data.csv',
         help='metadata csv file'
     )
+    parser.add_argument('--meta_data_plus_file', type=str,
+        default='meta_data_plus.csv',
+        help='metadata csv file'
+    )
     parser.add_argument('--profile_data_file', type=str,
         default='profile_data.csv',
         help='profile data csv file'
@@ -194,6 +210,10 @@ if __name__ == '__main__':
     parser.add_argument('--max_length', type=int,
         default=256,
         help='max length of albums'
+    )
+    parser.add_argument('--keyword_max_length', type=int,
+        default=10,
+        help='max length of album keywords'
     )
     parser.add_argument('--learning_rate', type=float,
         default=5e-5,

@@ -1,6 +1,6 @@
 
 import os
-import wandb
+# import wandb
 import torch
 import numpy as np
 import torch.nn as nn
@@ -37,30 +37,30 @@ class Trainer :
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
         
-        load_dotenv(dotenv_path="wandb.env")
-        WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
-        wandb.login(key=WANDB_AUTH_KEY)
+        # load_dotenv(dotenv_path="wandb.env")
+        # WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
+        # wandb.login(key=WANDB_AUTH_KEY)
 
-        name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
-        wandb.init(
-            entity="sangha0411",
-            project="bert4rec",
-            group=f"ai-ground",
-            name=name
-        )
+        # name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
+        # wandb.init(
+        #     entity="sangha0411",
+        #     project="bert4rec",
+        #     group=f"ai-ground",
+        #     name=name
+        # )
 
-        training_args = {
-            "epochs": args.epochs, 
-            "total_steps" : total_steps,
-            "warmup_steps" : warmup_steps,
-            "batch_size": args.train_batch_size, 
-            "learning_rate": args.learning_rate, 
-            "weight_decay": args.weight_decay, 
-        }
-        wandb.config.update(training_args)
+        # training_args = {
+        #     "epochs": args.epochs, 
+        #     "total_steps" : total_steps,
+        #     "warmup_steps" : warmup_steps,
+        #     "batch_size": args.train_batch_size, 
+        #     "learning_rate": args.learning_rate, 
+        #     "weight_decay": args.weight_decay, 
+        # }
+        # wandb.config.update(training_args)
 
         self.model.to(self.device)
-        vocab_size = self.model.config.vocab_size
+        num_labels = self.model.config.num_labels
 
         for step in tqdm(range(total_steps)) :
 
@@ -76,21 +76,23 @@ class Trainer :
             age_input = age_input.long().to(self.device)
             gender_input = gender_input.long().to(self.device)
 
-            album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
+            album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
             album_input = album_input.long().to(self.device)
             genre_input = genre_input.long().to(self.device)
             country_input = country_input.long().to(self.device)
+            keyword_input = keyword_input.long().to(self.device)
 
             logits = self.model(
                 album_input=album_input, 
                 genre_input=genre_input,
                 country_input=country_input,
+                keyword_input=keyword_input,
                 age_input=age_input,
                 gender_input=gender_input,
             )
 
-            labels = data['labels'].long().to(self.device)
-            loss = loss_fn(logits.view(-1, vocab_size), labels.view(-1,))
+            labels = data['labels'].long().to(self.device)            
+            loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
 
             loss.backward()
             optimizer.step()
@@ -99,7 +101,7 @@ class Trainer :
             if step % args.logging_steps == 0 and step > 0 :
                 current_lr = scheduler.get_last_lr()[0]
                 log = {'train/step' : step, 'train/loss' : loss.item(), 'train/lr' : current_lr}
-                wandb.log(log)
+                # wandb.log(log)
                 print(log)
 
             if args.do_eval :
@@ -111,13 +113,13 @@ class Trainer :
                     model_path = os.path.join(args.save_dir, f'checkpoint-{step}.pt')        
                     torch.save(self.model.state_dict(), model_path)
 
-        if args.do_eval :
-            self.evaluate()
-        else :
-            model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
-            torch.save(self.model.state_dict(), model_path)
+        # if args.do_eval :
+        #     self.evaluate()
+        # else :
+        #     model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
+        #     torch.save(self.model.state_dict(), model_path)
             
-        wandb.finish()
+        # wandb.finish()
 
     def evaluate(self) :
         self.model.eval()
@@ -131,15 +133,17 @@ class Trainer :
                 age_input = age_input.long().to(self.device)
                 gender_input = gender_input.long().to(self.device)
 
-                album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
+                album_input, genre_input, country_input, keyword_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input'], eval_data['keyword_input']
                 album_input = album_input.long().to(self.device)
                 genre_input = genre_input.long().to(self.device)
                 country_input = country_input.long().to(self.device)
+                keyword_input = keyword_input.long().to(self.device)
 
                 logits = self.model(
                     album_input=album_input, 
                     genre_input=genre_input,
                     country_input=country_input,
+                    keyword_input=keyword_input,
                     age_input=age_input,
                     gender_input=gender_input,
                 )
@@ -152,7 +156,7 @@ class Trainer :
 
             eval_log = compute_metrics(eval_predictions, eval_labels)
             eval_log = {'eval/' + k : v for k, v in eval_log.items()}
-            wandb.log(eval_log)
+            # wandb.log(eval_log)
             print(eval_log)
 
         self.model.train()
