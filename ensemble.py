@@ -16,11 +16,11 @@ import warnings
 TOPK = 25
 ENSEMBLE_SIZE = 5
 MODEL_PATHS = [
-    'exps/seed1/checkpoint-3250.pt',
-    'exps/seed2/checkpoint-3250.pt',
-    'exps/seed3/checkpoint-3250.pt',
-    'exps/seed4/checkpoint-3250.pt',
-    'exps/seed5/checkpoint-3250.pt',
+    'exps/seed1/checkpoint-2500.pt',
+    'exps/seed2/checkpoint-2500.pt',
+    'exps/seed3/checkpoint-2500.pt',
+    'exps/seed4/checkpoint-2500.pt',
+    'exps/seed5/checkpoint-2500.pt',
     ]
 
 def train(args) :
@@ -81,7 +81,6 @@ def train(args) :
 
     # -- Data Collator
     data_collator = DataCollatorWithPadding(
-        profile_data=profile_data_df, 
         special_token_dict=special_token_dict,
         max_length=args.max_length,
     )
@@ -111,10 +110,6 @@ def train(args) :
         sub_predictions = []
         with torch.no_grad() :
             for data in tqdm(data_loader) :
-                
-                age_input, gender_input = data['age'], data['gender']
-                age_input = age_input.long().to(device)
-                gender_input = gender_input.long().to(device)
 
                 album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
                 album_input = album_input.long().to(device)
@@ -125,8 +120,6 @@ def train(args) :
                     album_input=album_input, 
                     genre_input=genre_input,
                     country_input=country_input,
-                    age_input=age_input,
-                    gender_input=gender_input,
                 )
 
                 logits = F.softmax(logits[:, -1, :], dim=-1).detach().cpu().numpy().tolist()
