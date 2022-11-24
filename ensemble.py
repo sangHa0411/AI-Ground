@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch.nn.functional as F
 from tqdm import tqdm
-from model.model import Bert
+from model.bert import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
 from utils.preprocessor import preprocess, parse

@@ -24,7 +24,8 @@ class DataCollatorWithMasking :
     def __call__(self, dataset) :
         albums, genres, countries = [], [], []
 
-        max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
+        # max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
+        max_length = self.max_length
 
         for data in dataset :
             album, genre, country = data['album'], data['genre'], data['country']
@@ -111,7 +112,8 @@ class DataCollatorWithPadding :
         ids, albums, genres, countries = [], [], [], []
 
         labels = []
-        max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
+        # max_length = min(self.max_length, max([len(d['album']) for d in dataset]))
+        max_length = self.max_length
 
         for data in dataset :
             d_id = data['id']
