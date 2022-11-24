@@ -91,7 +91,6 @@ def train(args) :
 
         # -- Train Data Collator
         train_data_collator = DataCollatorWithMasking(
-            profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
             mlm=True,
@@ -109,7 +108,6 @@ def train(args) :
 
         # -- Eval Data Collator
         eval_data_collator = DataCollatorWithPadding(
-            profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
         )
@@ -132,7 +130,6 @@ def train(args) :
 
         # -- Train Data Collator
         train_data_collator = DataCollatorWithMasking(
-            profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
             mlm=True,

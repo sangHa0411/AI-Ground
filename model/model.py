@@ -12,17 +12,8 @@ class Bert(nn.Module) :
         self.encoder = BertEncoder(config)
 
         # Position Embedding
-        self.position_embed = nn.Parameter(
-            torch.normal(
-                mean=0.0, 
-                std=0.01, 
-                size=(config.max_length, config.hidden_size)), 
-            requires_grad=True
-        )
-
-        # Profile
-        self.age_embed = nn.Embedding(config.age_size, config.hidden_size)
-        self.gender_embed = nn.Embedding(config.gender_size, config.hidden_size)
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+        self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
 
         # Album Sequence
         self.album_embed = nn.Embedding(config.album_size, config.hidden_size)
@@ -54,19 +45,10 @@ class Bert(nn.Module) :
         album_input, 
         genre_input, 
         country_input,
-        age_input,
-        gender_input,
     ) :
 
         mask_token_id = self.config.album_size - 2
         batch_size, seq_size = album_input.shape
-
-        # Profile
-        age_tensor = self.age_embed(age_input)
-        gender_tensor = self.gender_embed(gender_input)
-
-        profile_tensor = age_tensor + gender_tensor
-        profile_tensor = profile_tensor.unsqueeze(1)
 
         # Album Sequence
         album_tensor = self.album_embed(album_input)
@@ -74,18 +56,20 @@ class Bert(nn.Module) :
         country_tensor = self.country_embed(country_input)
 
         # Attention
-        pos_tensor = self.position_embed[:seq_size, :]
-        attention_mask = torch.where(album_input==mask_token_id, 1.0, 0.0) * (-1e+20)
-        attention_mask = attention_mask.view(batch_size, 1, 1, seq_size)
+        pos_ids = self.position_ids[:, :seq_size]
+        pos_tensor = self.position_embeddings(pos_ids)
 
         # Input Tensor
         input_tensor = album_tensor + genre_tensor + country_tensor + pos_tensor
         input_tensor = self.layernorm(input_tensor)
         input_tensor = self.dropout(input_tensor)
         
+        attention_mask = torch.where(album_input==mask_token_id, 1.0, 0.0) * (-1e+20)
+        attention_mask = attention_mask.view(batch_size, 1, 1, seq_size)
+
         # Output Tensor
         sequence_output = self.encoder(
-            hidden_states=input_tensor + profile_tensor, 
+            hidden_states=input_tensor,
             attention_mask=attention_mask
         )[0]
 

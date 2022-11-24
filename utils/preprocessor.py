@@ -41,7 +41,7 @@ def parse(df) :
     profile_ids = list(df['profile_id'].unique())
 
     d_ids, d_albums, d_genres, d_countries = [], [], [], []
-    for p in tqdm(profile_ids) :
+    for p in profile_ids :
         sub_df = df[df['profile_id'] == p]
 
         d_ids.append(p)
