@@ -56,6 +56,7 @@ def train(args) :
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
 
+    # -- Model Config
     model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
@@ -73,7 +74,7 @@ def train(args) :
     )
 
     # -- Model
-    num_labels = max_album_value + 1
+    num_labels = album_size
     model_config.vocab_size = num_labels
     model = Bert(model_config)
 
@@ -91,6 +92,7 @@ def train(args) :
 
         # -- Train Data Collator
         train_data_collator = DataCollatorWithMasking(
+            profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
             mlm=True,
@@ -108,6 +110,7 @@ def train(args) :
 
         # -- Eval Data Collator
         eval_data_collator = DataCollatorWithPadding(
+            profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
         )
@@ -130,6 +133,7 @@ def train(args) :
 
         # -- Train Data Collator
         train_data_collator = DataCollatorWithMasking(
+            profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
             mlm=True,

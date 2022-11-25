@@ -76,6 +76,10 @@ class Trainer :
 
             optimizer.zero_grad()
 
+            age_input, gender_input = data['age'], data['gender']
+            age_input = age_input.long().to(self.device)
+            gender_input = gender_input.long().to(self.device)
+
             album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
             album_input = album_input.long().to(self.device)
             genre_input = genre_input.long().to(self.device)
@@ -85,6 +89,8 @@ class Trainer :
                 album_input=album_input, 
                 genre_input=genre_input,
                 country_input=country_input,
+                age_input=age_input,
+                gender_input=gender_input,
             )
 
             labels = data['labels'].long().to(self.device)
@@ -110,8 +116,7 @@ class Trainer :
                     torch.save(self.model.state_dict(), model_path)
 
         if args.do_eval :
-            if total_steps % args.eval_steps != 0 :
-                self.evaluate()
+            self.evaluate()
         else :
             model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
             torch.save(self.model.state_dict(), model_path)
@@ -126,6 +131,10 @@ class Trainer :
             eval_predictions, eval_labels = [], []
             for eval_data in tqdm(self.eval_dataloader) :
 
+                age_input, gender_input = eval_data['age'], eval_data['gender']
+                age_input = age_input.long().to(self.device)
+                gender_input = gender_input.long().to(self.device)
+
                 album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
                 album_input = album_input.long().to(self.device)
                 genre_input = genre_input.long().to(self.device)
@@ -135,6 +144,8 @@ class Trainer :
                     album_input=album_input, 
                     genre_input=genre_input,
                     country_input=country_input,
+                    age_input=age_input,
+                    gender_input=gender_input,
                 )
 
                 logits = logits[:,-1,:].detach().cpu().numpy()

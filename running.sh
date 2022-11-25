@@ -6,14 +6,13 @@ python train.py --data_dir ./data \
     --meta_data_file meta_data.csv \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
-    --max_length 50 \
+    --max_length 100 \
     --do_eval True \
     --learning_rate 1e-4 \
     --weight_decay 1e-2 \
     --train_batch_size 256 \
     --eval_batch_size 32 \
-    --epochs 50 \
-    --max_steps 3000 \
+    --max_steps 3200 \
     --mlm_probability 0.4 \
     --logging_steps 100 \
     --eval_steps 500 \
