@@ -1,6 +1,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers.models.bert.modeling_bert import BertEncoder
 
 
@@ -12,13 +13,8 @@ class Bert(nn.Module) :
         self.encoder = BertEncoder(config)
 
         # Position Embedding
-        self.position_embed = nn.Parameter(
-            torch.normal(
-                mean=0.0, 
-                std=0.01, 
-                size=(config.max_length, config.hidden_size)), 
-            requires_grad=True
-        )
+        self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
+        self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
 
         # Profile
         self.age_embed = nn.Embedding(config.age_size, config.hidden_size)
@@ -32,18 +28,24 @@ class Bert(nn.Module) :
         )
 
         # Album Sequence
-        self.album_embed = nn.Embedding(config.album_size, config.hidden_size)
+        self.album_embed = nn.Parameter(
+            torch.normal(
+                mean=0.0, 
+                std=0.01, 
+                size=(config.album_size, config.hidden_size)), 
+            requires_grad=True
+        )
         self.genre_embed = nn.Embedding(config.genre_size, config.hidden_size)
         self.country_embed = nn.Embedding(config.country_size, config.hidden_size)
         
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-
+        
         # Dropouts
         self.dropouts = nn.ModuleList([nn.Dropout(config.classifier_dropout) for _ in range(5)])
         
         # Classification
-        self.classification_head = nn.Linear(config.hidden_size, config.num_labels, bias=False)
+        self.classification_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.apply(self._init_weights)
         
 
@@ -66,17 +68,17 @@ class Bert(nn.Module) :
         gender_input,
     ) :
 
-        mask_token_id = self.config.album_size - 2
+        pad_token_id = self.config.album_size - 2
         batch_size, seq_size = album_input.shape
 
-        # Profile
+        # Profile Embedding
         age_tensor = self.age_embed(age_input)
         gender_tensor = self.gender_embed(gender_input)
 
         profile_tensor = age_tensor + gender_tensor
         profile_tensor = profile_tensor.unsqueeze(1)
 
-        # Keyword
+        # Keyword Embedding
         keyword_pad_token_id = self.config.keyword_size - 2
 
         keyword_tensor = self.keyword_embed(keyword_input)
@@ -86,22 +88,25 @@ class Bert(nn.Module) :
         keyword_tensor = torch.sum(keyword_tensor, dim=2)
         keyword_tensor = keyword_tensor / keyword_length.unsqueeze(-1)
 
-        # Album Sequence
-        album_tensor = self.album_embed(album_input)
+        # Album Sequence Embedding
+        album_tensor = F.embedding(album_input, self.album_embed, padding_idx=pad_token_id)
         genre_tensor = self.genre_embed(genre_input)
         country_tensor = self.country_embed(country_input)
 
+        # Positional Embedding
+        pos_ids = self.position_ids[:, :seq_size]
+        pos_tensor = self.position_embeddings(pos_ids)
+
         # Attention
-        pos_tensor = self.position_embed[:seq_size, :]
-        attention_mask = torch.where(album_input==mask_token_id, 1.0, 0.0) * (-1e+20)
+        attention_mask = torch.where(album_input==pad_token_id, 1.0, 0.0) * (-1e+20)
         attention_mask = attention_mask.view(batch_size, 1, 1, seq_size)
 
-        # Input Tensor
+        # Bert Input Tensor
         input_tensor = album_tensor + genre_tensor + country_tensor + keyword_tensor + pos_tensor
         input_tensor = self.layernorm(input_tensor)
         input_tensor = self.dropout(input_tensor)
         
-        # Output Tensor
+        # Bert Output Tensor
         sequence_output = self.encoder(
             hidden_states=input_tensor + profile_tensor, 
             attention_mask=attention_mask
@@ -109,9 +114,9 @@ class Bert(nn.Module) :
 
         for i in range(5) :
             if i == 0 :
-                logits = self.classification_head(self.dropouts[i](sequence_output))
+                logits = torch.matmul(self.dropouts[i](sequence_output), self.album_embed.T)
             else :
-                logits += self.classification_head(self.dropouts[i](sequence_output))
+                logits += torch.matmul(self.dropouts[i](sequence_output), self.album_embed.T)
 
         logits /= len(self.dropouts)
         return logits

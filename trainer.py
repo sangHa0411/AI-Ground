@@ -60,7 +60,7 @@ class Trainer :
         wandb.config.update(training_args)
 
         self.model.to(self.device)
-        num_labels = self.model.config.num_labels
+        num_labels = self.model.config.vocab_size
 
         for step in tqdm(range(total_steps)) :
 

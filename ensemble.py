@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch.nn.functional as F
 from tqdm import tqdm
-from model.model import Bert
+from model.bert import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
 from utils.loader import load_history, load_meta
@@ -100,8 +100,8 @@ def train(args) :
     )
 
     # -- Model
-    num_labels = max_album_value + 1
-    model_config.num_labels = num_labels
+    num_labels = album_size
+    model_config.vocab_size = num_labels
 
     prediction_logits = []
     for i in range(ENSEMBLE_SIZE) :    

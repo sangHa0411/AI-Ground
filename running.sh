@@ -1,50 +1,51 @@
 # Training with Evaluation
 
-# # Model 1
-# python train.py --data_dir ./data \
-#     --seed 42 \
-#     --meta_data_file meta_data.csv \
-#     --profile_data_file profile_data.csv \
-#     --history_data_file history_data.csv \
-#     --max_length 50 \
-#     --do_eval True \
-#     --learning_rate 1e-4 \
-#     --weight_decay 1e-3 \
-#     --train_batch_size 128 \
-#     --eval_batch_size 32 \
-#     --epochs 50 \
-#     --max_steps 2800 \
-#     --mlm_probability 0.6 \
-#     --logging_steps 100 \
-#     --eval_steps 500 \
-#     --hidden_size 768 \
-#     --num_layers 12 \
-#     --num_head 8 \
-#     --num_workers 4 \
-#     --intermediate_size 3072 \
-#     --dropout_prob 0.1 \
-#     --warmup_ratio 0.05 \
-#     --eps 1e-12 \
-#     --save_dir ./exps
+# Model 1
+python train.py --data_dir ./data \
+    --seed 42 \
+    --meta_data_file meta_data.csv \
+    --profile_data_file profile_data.csv \
+    --history_data_file history_data.csv \
+    --max_length 80 \
+    --keyword_max_length 10 \
+    --do_eval True \
+    --learning_rate 1e-4 \
+    --weight_decay 1e-3 \
+    --train_batch_size 256 \
+    --eval_batch_size 32 \
+    --epochs 50 \
+    --max_steps 3200 \
+    --mlm_probability 0.5 \
+    --logging_steps 100 \
+    --eval_steps 500 \
+    --hidden_size 768 \
+    --num_layers 12 \
+    --num_head 8 \
+    --num_workers 4 \
+    --intermediate_size 3072 \
+    --dropout_prob 0.1 \
+    --warmup_ratio 0.1 \
+    --eps 1e-12 \
+    --save_dir ./exps
 
 # Full Training
 rm -rf ./exps/*
 
 ## Test Model
-mkdir ./exps/seed42
+mkdir ./exps/seed1
 python train.py --data_dir ./data \
     --meta_data_file meta_data.csv \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
     --seed 42 \
-    --max_length 50 \
+    --max_length 100 \
     --learning_rate 1e-4 \
     --weight_decay 1e-2 \
-    --train_batch_size 128 \
+    --train_batch_size 256 \
     --eval_batch_size 32 \
     --epochs 50 \
-    --max_steps 2800 \
-    --mlm_probability 0.6 \
+    --max_steps 3200 \
+    --mlm_probability 0.4 \
     --logging_steps 100 \
     --save_steps 500 \
     --hidden_size 768 \
@@ -53,9 +54,9 @@ python train.py --data_dir ./data \
     --num_workers 4 \
     --intermediate_size 3072 \
     --dropout_prob 0.1 \
-    --warmup_ratio 0.05 \
+    --warmup_ratio 0.1 \
     --eps 1e-12 \
-    --save_dir ./exps/seed42
+    --save_dir ./exps/seed1
 
 ## Model 1
 mkdir ./exps/seed1
