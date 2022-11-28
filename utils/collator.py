@@ -1,5 +1,6 @@
 
 import torch
+import random
 import numpy as np
 from tqdm import tqdm
 
@@ -100,12 +101,21 @@ class DataCollatorWithMasking :
         speical_token_dict, 
     ) :
 
+        batch_size, seq_size = album_tensor.shape
+        
+        last_mask_tensor = torch.zeros(seq_size, dtype=torch.double)
+        last_mask_tensor[-1] = 1.0
+
+        last_mask_indices = random.sample(range(batch_size), int(batch_size * 0.1))
+
         label_tensor = album_tensor.clone()
         pad_token_id = speical_token_dict['album_pad_token_id']
         
-        probability_matrix = torch.full(label_tensor.shape, self.mlm_probability)
+        probability_matrix = torch.full(label_tensor.shape, self.mlm_probability, dtype=torch.double)
+        probability_matrix[last_mask_indices] = last_mask_tensor
+
         probability_matrix = torch.where(
-            label_tensor == pad_token_id, 0.0, self.mlm_probability
+            label_tensor == pad_token_id, 0.0, probability_matrix
         )
 
         masked_indices = torch.bernoulli(probability_matrix).bool()
@@ -116,7 +126,6 @@ class DataCollatorWithMasking :
         country_tensor[masked_indices] = speical_token_dict['country_mask_token_id']
 
         return album_tensor, genre_tensor, country_tensor, label_tensor 
-
 
 
 class DataCollatorWithPadding :

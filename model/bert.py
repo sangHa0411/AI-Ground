@@ -38,7 +38,6 @@ class Bert(nn.Module) :
         self.dropouts = nn.ModuleList([nn.Dropout(config.classifier_dropout) for _ in range(5)])
         
         # Classification
-        self.classification_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.apply(self._init_weights)
         
 

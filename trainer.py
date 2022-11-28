@@ -65,7 +65,7 @@ class Trainer :
 
         self.model.to(self.device)
         vocab_size = self.model.config.vocab_size
-
+    
         for step in tqdm(range(total_steps)) :
 
             try :

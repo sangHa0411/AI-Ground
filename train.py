@@ -56,7 +56,7 @@ def train(args) :
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
 
-    # -- Model Config
+    # -- Model Config (Bert)
     model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
