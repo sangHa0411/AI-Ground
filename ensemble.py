@@ -17,11 +17,11 @@ import warnings
 TOPK = 25
 ENSEMBLE_SIZE = 3
 MODEL_PATHS = [
-    'exps/seed1/checkpoint-2800.pt',
-    'exps/seed2/checkpoint-2800.pt',
-    'exps/seed3/checkpoint-2800.pt',
-    'exps/seed4/checkpoint-2800.pt',
-    'exps/seed5/checkpoint-2800.pt',
+    'exps/seed1/checkpoint-3200.pt',
+    'exps/seed2/checkpoint-3200.pt',
+    'exps/seed3/checkpoint-3200.pt',
+    'exps/seed4/checkpoint-3200.pt',
+    'exps/seed5/checkpoint-3200.pt',
     ]
 
 def train(args) :
@@ -33,7 +33,6 @@ def train(args) :
     cuda_str = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(cuda_str)
     print("\nDevice:", device)
-
 
     # -- Load dataset
     history_data_df = pd.read_csv(os.path.join(args.data_dir, args.history_data_file), encoding='utf-8')

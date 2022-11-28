@@ -6,15 +6,15 @@ python train.py --data_dir ./data \
     --meta_data_file meta_data.csv \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
-    --max_length 80 \
+    --max_length 100 \
     --keyword_max_length 10 \
     --do_eval True \
     --learning_rate 1e-4 \
     --weight_decay 1e-3 \
-    --train_batch_size 256 \
+    --train_batch_size 280 \
     --eval_batch_size 32 \
     --epochs 50 \
-    --max_steps 3200 \
+    --max_steps 3500 \
     --mlm_probability 0.5 \
     --logging_steps 100 \
     --eval_steps 500 \
@@ -31,21 +31,20 @@ python train.py --data_dir ./data \
 # Full Training
 rm -rf ./exps/*
 
-## Test Model
+## Model 1
 mkdir ./exps/seed1
 python train.py --data_dir ./data \
     --meta_data_file meta_data.csv \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
-    --seed 42 \
+    --seed 1 \
     --max_length 100 \
+    --keyword_max_length 10 \
     --learning_rate 1e-4 \
     --weight_decay 1e-2 \
-    --train_batch_size 256 \
-    --eval_batch_size 32 \
-    --epochs 50 \
     --max_steps 3200 \
-    --mlm_probability 0.4 \
+    --train_batch_size 280 \
+    --mlm_probability 0.5 \
     --logging_steps 100 \
     --save_steps 500 \
     --hidden_size 768 \
@@ -58,21 +57,20 @@ python train.py --data_dir ./data \
     --eps 1e-12 \
     --save_dir ./exps/seed1
 
-## Model 1
-mkdir ./exps/seed1
+## Model 2
+mkdir ./exps/seed2
 python train.py --data_dir ./data \
     --meta_data_file meta_data.csv \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
-    --seed 1 \
-    --epochs 50 \
-    --max_steps 2800 \
-    --max_length 50 \
+    --seed 2 \
+    --max_length 100 \
+    --keyword_max_length 10 \
     --learning_rate 1e-4 \
     --weight_decay 1e-2 \
-    --train_batch_size 128 \
-    --eval_batch_size 32 \
-    --mlm_probability 0.6 \
+    --max_steps 3200 \
+    --train_batch_size 280 \
+    --mlm_probability 0.5 \
     --logging_steps 100 \
     --save_steps 500 \
     --hidden_size 768 \
@@ -81,34 +79,7 @@ python train.py --data_dir ./data \
     --num_workers 4 \
     --intermediate_size 3072 \
     --dropout_prob 0.1 \
-    --warmup_ratio 0.05 \
-    --eps 1e-12 \
-    --save_dir ./exps/seed1
-
-## Model 2
-mkdir ./exps/seed2
-python train.py --data_dir ./data \
-    --meta_data_file meta_data.csv \
-    --profile_data_file profile_data.csv \
-    --history_data_file history_data.csv \
-    --seed 2 \
-    --epochs 50 \
-    --max_steps 2800 \
-    --max_length 50 \
-    --learning_rate 1e-4 \
-    --weight_decay 1e-2 \
-    --train_batch_size 128 \
-    --eval_batch_size 32 \
-    --mlm_probability 0.6 \
-    --logging_steps 100 \
-    --save_steps 500 \
-    --hidden_size 768 \
-    --num_layers 12 \
-    --num_head 8 \
-    --num_workers 3 \
-    --intermediate_size 3072 \
-    --dropout_prob 0.1 \
-    --warmup_ratio 0.05 \
+    --warmup_ratio 0.1 \
     --eps 1e-12 \
     --save_dir ./exps/seed2
 
@@ -119,23 +90,22 @@ python train.py --data_dir ./data \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
     --seed 3 \
-    --epochs 50 \
-    --max_steps 2800 \
-    --max_length 50 \
+    --max_length 100 \
+    --keyword_max_length 10 \
     --learning_rate 1e-4 \
     --weight_decay 1e-2 \
-    --train_batch_size 128 \
-    --eval_batch_size 32 \
-    --mlm_probability 0.6 \
+    --max_steps 3200 \
+    --train_batch_size 280 \
+    --mlm_probability 0.5 \
     --logging_steps 100 \
     --save_steps 500 \
     --hidden_size 768 \
     --num_layers 12 \
     --num_head 8 \
-    --num_workers 3 \
+    --num_workers 4 \
     --intermediate_size 3072 \
     --dropout_prob 0.1 \
-    --warmup_ratio 0.05 \
+    --warmup_ratio 0.1 \
     --eps 1e-12 \
     --save_dir ./exps/seed3
 
@@ -146,23 +116,22 @@ python train.py --data_dir ./data \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
     --seed 4 \
-    --epochs 50 \
-    --max_steps 2800 \
-    --max_length 50 \
+    --max_length 100 \
+    --keyword_max_length 10 \
     --learning_rate 1e-4 \
     --weight_decay 1e-2 \
-    --train_batch_size 128 \
-    --eval_batch_size 32 \
-    --mlm_probability 0.6 \
+    --max_steps 3200 \
+    --train_batch_size 280 \
+    --mlm_probability 0.5 \
     --logging_steps 100 \
     --save_steps 500 \
     --hidden_size 768 \
     --num_layers 12 \
     --num_head 8 \
-    --num_workers 3 \
+    --num_workers 4 \
     --intermediate_size 3072 \
     --dropout_prob 0.1 \
-    --warmup_ratio 0.05 \
+    --warmup_ratio 0.1 \
     --eps 1e-12 \
     --save_dir ./exps/seed4
 
@@ -174,57 +143,56 @@ python train.py --data_dir ./data \
     --profile_data_file profile_data.csv \
     --history_data_file history_data.csv \
     --seed 5 \
-    --epochs 50 \
-    --max_steps 2800 \
-    --max_length 50 \
+    --max_length 100 \
+    --keyword_max_length 10 \
     --learning_rate 1e-4 \
     --weight_decay 1e-2 \
-    --train_batch_size 128 \
-    --eval_batch_size 32 \
-    --mlm_probability 0.6 \
+    --max_steps 3200 \
+    --train_batch_size 280 \
+    --mlm_probability 0.5 \
     --logging_steps 100 \
     --save_steps 500 \
     --hidden_size 768 \
     --num_layers 12 \
     --num_head 8 \
-    --num_workers 3 \
+    --num_workers 4 \
     --intermediate_size 3072 \
     --dropout_prob 0.1 \
-    --warmup_ratio 0.05 \
+    --warmup_ratio 0.1 \
     --eps 1e-12 \
     --save_dir ./exps/seed5
 
-# # Prediction
-# python predict.py  --data_dir ./data \
-#     --meta_data_file meta_data.csv \
-#     --submission_file sample_submission.csv \
-#     --profile_data_file profile_data.csv \
-#     --history_data_file history_data.csv \
-#     --max_length 50 \
-#     --eval_batch_size 32 \
-#     --model_path exps/seed42/checkpoint-2800.pt \
-#     --num_workers 4 \
-#     --hidden_size 768 \
-#     --num_layers 12 \
-#     --num_head 8 \
-#     --intermediate_size 3072 \
-#     --dropout_prob 0.1 \
-#     --eps 1e-12 \
-#     --output_file ./results/2022_11_22_0.csv
+# Prediction
+python predict.py  --data_dir ./data \
+    --meta_data_file meta_data.csv \
+    --submission_file sample_submission.csv \
+    --profile_data_file profile_data.csv \
+    --history_data_file history_data.csv \
+    --max_length 100 \
+    --eval_batch_size 32 \
+    --model_path exps/seed42/checkpoint-3200.pt \
+    --num_workers 4 \
+    --hidden_size 768 \
+    --num_layers 12 \
+    --num_head 8 \
+    --intermediate_size 3072 \
+    --dropout_prob 0.1 \
+    --eps 1e-12 \
+    --output_file ./results/2022_11_28_1.csv
 
-# # Ensemble
-# python ensemble.py  --data_dir ./data \
-#     --meta_data_file meta_data.csv \
-#     --submission_file sample_submission.csv \
-#     --profile_data_file profile_data.csv \
-#     --history_data_file history_data.csv \
-#     --max_length 50 \
-#     --eval_batch_size 32 \
-#     --num_workers 3 \
-#     --hidden_size 768 \
-#     --num_layers 12 \
-#     --num_head 8 \
-#     --intermediate_size 3072 \
-#     --dropout_prob 0.1 \
-#     --eps 1e-12 \
-#     --output_file ./results/2022_11_22_1.csv
+# Ensemble
+python ensemble.py  --data_dir ./data \
+    --meta_data_file meta_data.csv \
+    --submission_file sample_submission.csv \
+    --profile_data_file profile_data.csv \
+    --history_data_file history_data.csv \
+    --max_length 50 \
+    --eval_batch_size 32 \
+    --num_workers 3 \
+    --hidden_size 768 \
+    --num_layers 12 \
+    --num_head 8 \
+    --intermediate_size 3072 \
+    --dropout_prob 0.1 \
+    --eps 1e-12 \
+    --output_file ./results/2022_11_22_1.csv
