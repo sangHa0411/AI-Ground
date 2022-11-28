@@ -112,16 +112,16 @@ class Trainer :
                 if step % args.eval_steps == 0 and step > 0 :
                     print('\nValidation at %d step' %step)
                     self.evaluate()
-            else :
+
                 if step % args.save_steps == 0 and step > 0 :
                     model_path = os.path.join(args.save_dir, f'checkpoint-{step}.pt')        
                     torch.save(self.model.state_dict(), model_path)
 
         if args.do_eval :
             self.evaluate()
-        else :
-            model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
-            torch.save(self.model.state_dict(), model_path)
+
+        model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
+        torch.save(self.model.state_dict(), model_path)
             
         wandb.finish()
 
@@ -158,9 +158,9 @@ class Trainer :
                 eval_predictions.extend(logits.tolist())
                 eval_labels.extend(eval_data['labels'])
 
-            eval_log = compute_metrics(eval_predictions, eval_labels)
-            eval_log = {'eval/' + k : v for k, v in eval_log.items()}
-            wandb.log(eval_log)
-            print(eval_log)
+        eval_log = compute_metrics(eval_predictions, eval_labels)
+        eval_log = {'eval/' + k : v for k, v in eval_log.items()}
+        wandb.log(eval_log)
+        print(eval_log)
 
         self.model.train()
