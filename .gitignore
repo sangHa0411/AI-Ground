@@ -3,6 +3,8 @@ exps
 wandb
 references
 results
+evaluation
 *.ipynb
 *.env
+*.json
 __pycache__

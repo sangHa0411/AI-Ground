@@ -1,6 +1,8 @@
 
 import os
+import copy
 import torch
+import json
 import argparse
 import numpy as np
 import pandas as pd
@@ -11,7 +13,7 @@ from torch.utils.data import DataLoader
 from utils.loader import load_history, load_meta
 from utils.preprocessor import Spliter, parse
 from utils.collator import DataCollatorWithPadding
-from utils.metrics import recallk, ndcgk, unique
+from utils.metrics import recallk
 import warnings
 
 TOPK = 25
@@ -99,7 +101,7 @@ def train(args) :
     dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
     
     eval_dataset = copy.deepcopy(dataset)
-    eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0)
+    eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0, num_proc=args.num_workers)
     print(eval_dataset)
 
     # -- Loader 
@@ -138,31 +140,35 @@ def train(args) :
             )
 
             logits = logits[:, -1, :].detach().cpu().numpy()
-            pred_args = np.argsort(-logits, axis=-1)
+            logits = np.argsort(-logits, axis=-1)
 
             predictions.extend(logits.tolist())
             labels.extend(data['labels'])
     
+    wrong_dataset = []
     recall_25 = 0.0
-    ndcg_25 = 0.0
     for i in range(len(predictions)) :
 
         pred = predictions[i]
         label = labels[i]
 
         recall = recallk(label, pred)
-        ndcg = ndcgk(label, pred)
-
         recall_25 += recall
-        ndcg_25 += ndcg
-        breakpoint()
+
+        if recall <= 0.1 :
+            data = {
+                'id' : eval_dataset[i]['id'],
+                'album' : eval_dataset[i]['album'],
+                'size' : len(eval_dataset[i]['album']),
+                'labels' : eval_dataset[i]['labels']
+            }
+            wrong_dataset.append(data)
 
     recall_25 /= len(predictions)
-    ndcg_25 /= len(predictions)
+    print('The number of wrong dataset : %d \t Recall-25 : %.3f' %(len(wrong_dataset), recall_25))
 
-    eval_metric = {'Recall-25' : recall_25, 'Ndcg-25' : ndcg_25}
-    print(eval_metric)
-
+    with open("./evaluation/evaluation_wrong_dataset.json", "w") as json_file:
+        json.dump(wrong_dataset, json_file, indent=4, ensure_ascii=False)
 
 if __name__ == '__main__':
 
@@ -183,6 +189,10 @@ if __name__ == '__main__':
     parser.add_argument('--history_data_file', type=str,
         default='history_data.csv',
         help='history data csv file'
+    )
+    parser.add_argument('--leave_probability', type=float,
+        default=0.2,
+        help='validation_ratio'
     )
     parser.add_argument('--data_dir', type=str,
         default='../data',

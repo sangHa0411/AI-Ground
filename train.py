@@ -95,7 +95,7 @@ def train(args) :
         print(train_dataset)
 
         eval_dataset = copy.deepcopy(dataset)
-        eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0)
+        eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0, num_proc=args.num_workers)
         print(eval_dataset)
 
         # -- Train Data Collator
