@@ -69,6 +69,7 @@ def train(args) :
         genre_size=genre_size,
         country_size=country_size,
         keyword_size=keyword_size,
+        keyword_length=args.keyword_max_length,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
         hidden_size=args.hidden_size,

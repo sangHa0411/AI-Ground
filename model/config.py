@@ -9,6 +9,7 @@ class BertConfig(PretrainedConfig):
         genre_size=30,
         country_size=20,
         keyword_size=1055,
+        keyword_length=10,
         age_size=15,
         gender_size=2,
         hidden_size=64,
@@ -31,6 +32,7 @@ class BertConfig(PretrainedConfig):
         self.genre_size = genre_size
         self.country_size = country_size
         self.keyword_size = keyword_size
+        self.keyword_length = keyword_length
         self.age_size = age_size
         self.gender_size = gender_size
         self.hidden_size = hidden_size

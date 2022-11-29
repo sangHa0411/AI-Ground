@@ -66,6 +66,8 @@ class Trainer :
         self.model.to(self.device)
         num_labels = self.model.config.vocab_size
 
+        scaler = torch.cuda.amp.GradScaler()
+
         for step in tqdm(range(total_steps)) :
 
             try :
@@ -76,30 +78,36 @@ class Trainer :
 
             optimizer.zero_grad()
 
-            age_input, gender_input = data['age'], data['gender']
-            age_input = age_input.long().to(self.device)
-            gender_input = gender_input.long().to(self.device)
+            with torch.cuda.amp.autocast():
 
-            album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
-            album_input = album_input.long().to(self.device)
-            genre_input = genre_input.long().to(self.device)
-            country_input = country_input.long().to(self.device)
-            keyword_input = keyword_input.long().to(self.device)
+                age_input, gender_input = data['age'], data['gender']
+                age_input = age_input.long().to(self.device)
+                gender_input = gender_input.long().to(self.device)
 
-            logits = self.model(
-                album_input=album_input, 
-                genre_input=genre_input,
-                country_input=country_input,
-                keyword_input=keyword_input,
-                age_input=age_input,
-                gender_input=gender_input,
-            )
+                album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
+                album_input = album_input.long().to(self.device)
+                genre_input = genre_input.long().to(self.device)
+                country_input = country_input.long().to(self.device)
+                keyword_input = keyword_input.long().to(self.device)
 
-            labels = data['labels'].long().to(self.device)            
-            loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
+                logits = self.model(
+                    album_input=album_input, 
+                    genre_input=genre_input,
+                    country_input=country_input,
+                    keyword_input=keyword_input,
+                    age_input=age_input,
+                    gender_input=gender_input,
+                )
 
-            loss.backward()
-            optimizer.step()
+                labels = data['labels'].long().to(self.device)            
+                loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
+            # loss.backward()
+            # optimizer.step()
             scheduler.step()
 
             if step % args.logging_steps == 0 and step > 0 :
@@ -113,10 +121,10 @@ class Trainer :
                     print('\nValidation at %d step' %step)
                     self.evaluate()
 
-                if step % args.save_steps == 0 and step > 0 :
-                    model_path = os.path.join(args.save_dir, f'checkpoint-{step}.pt')        
-                    torch.save(self.model.state_dict(), model_path)
-
+            if step % args.save_steps == 0 and step > 0 :
+                model_path = os.path.join(args.save_dir, f'checkpoint-{step}.pt')        
+                torch.save(self.model.state_dict(), model_path)
+        
         if args.do_eval :
             self.evaluate()
 

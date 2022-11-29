@@ -22,10 +22,8 @@ class Bert(nn.Module) :
 
         # Keyword
         self.keyword_embed = nn.Embedding(config.keyword_size, config.hidden_size)
-        self.keyword_zero_tensor = nn.Parameter(
-            torch.zeros(config.hidden_size),
-            requires_grad=False
-        )
+        self.keyword_dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.register_buffer("keyword_zero", torch.zeros(config.hidden_size))
 
         # Album Sequence
         self.album_embed = nn.Parameter(
@@ -40,7 +38,7 @@ class Bert(nn.Module) :
         
         self.layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        
+
         # Dropouts
         self.dropouts = nn.ModuleList([nn.Dropout(config.classifier_dropout) for _ in range(5)])
         
@@ -80,9 +78,10 @@ class Bert(nn.Module) :
         keyword_pad_token_id = self.config.keyword_size - 2
 
         keyword_tensor = self.keyword_embed(keyword_input)
+        keyword_tensor = self.keyword_dropout(keyword_tensor)
         keyword_length = torch.sum(keyword_input!=keyword_pad_token_id, dim=-1) + 1e-6
 
-        keyword_tensor[keyword_input==keyword_pad_token_id] = self.keyword_zero_tensor
+        keyword_tensor[keyword_input==keyword_pad_token_id] = self.keyword_zero
         keyword_tensor = torch.sum(keyword_tensor, dim=2)
         keyword_tensor = keyword_tensor / keyword_length.unsqueeze(-1)
 

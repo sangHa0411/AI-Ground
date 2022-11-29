@@ -15,7 +15,7 @@ from utils.collator import DataCollatorWithPadding
 import warnings
 
 TOPK = 25
-ENSEMBLE_SIZE = 3
+ENSEMBLE_SIZE = 5
 MODEL_PATHS = [
     'exps/seed1/checkpoint-3200.pt',
     'exps/seed2/checkpoint-3200.pt',
@@ -196,6 +196,10 @@ if __name__ == '__main__':
     parser.add_argument('--max_length', type=int,
         default=256,
         help='max length of albums'
+    )
+    parser.add_argument('--keyword_max_length', type=int,
+        default=10,
+        help='max length of album keywords'
     )
     parser.add_argument('--eval_batch_size', type=int,
         default=16,
