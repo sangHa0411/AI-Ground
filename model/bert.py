@@ -22,7 +22,6 @@ class Bert(nn.Module) :
 
         # Keyword
         self.keyword_embed = nn.Embedding(config.keyword_size, config.hidden_size)
-        self.keyword_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.register_buffer("keyword_zero", torch.zeros(config.hidden_size))
 
         # Album Sequence
@@ -78,7 +77,6 @@ class Bert(nn.Module) :
         keyword_pad_token_id = self.config.keyword_size - 2
 
         keyword_tensor = self.keyword_embed(keyword_input)
-        keyword_tensor = self.keyword_dropout(keyword_tensor)
         keyword_length = torch.sum(keyword_input!=keyword_pad_token_id, dim=-1) + 1e-6
 
         keyword_tensor[keyword_input==keyword_pad_token_id] = self.keyword_zero

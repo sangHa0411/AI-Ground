@@ -2,7 +2,6 @@
 import torch
 import random
 import numpy as np
-from tqdm import tqdm
 
 
 class DataCollatorWithMasking :
@@ -29,7 +28,7 @@ class DataCollatorWithMasking :
 
         profile_gender, profile_age = {}, {}
         
-        for i in tqdm(range(len(profile_data))) :
+        for i in range(len(profile_data)) :
             p_id, gender, age = profile_data.iloc[i][['profile_id', 'sex', 'age']]
             profile_gender[p_id] = gender
             profile_age[p_id] = age
@@ -160,7 +159,7 @@ class DataCollatorWithPadding :
 
         profile_gender, profile_age = {}, {}
         
-        for i in tqdm(range(len(profile_data))) :
+        for i in range(len(profile_data)) :
             p_id, gender, age = profile_data.iloc[i][['profile_id', 'sex', 'age', ]]
             profile_gender[p_id] = gender
             profile_age[p_id] = age

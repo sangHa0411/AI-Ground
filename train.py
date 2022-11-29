@@ -35,10 +35,13 @@ def train(args) :
     meta_data_plus_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_plus_file), encoding='utf-8')
 
     # -- Preprocess dataset
+    print('Loading user histories')
     history_df = load_history(history_data_df, meta_data_df)
+    print('Loading meta data')
     album_keywords, max_keyword_value = load_meta(meta_data_df, meta_data_plus_df, args.keyword_max_length)
 
     # -- Preprocess dataset
+    print('Preprocessing user histories')
     dataset = parse(history_df, album_keywords)
     print(dataset)
     
@@ -64,6 +67,7 @@ def train(args) :
     country_size = max_country_value + 3
     keyword_size = max_keyword_value + 3
 
+    # -- Config
     model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
@@ -91,12 +95,18 @@ def train(args) :
     
         spliter = Spliter(leave_probability=args.leave_probability)
         dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
+        print(dataset)
 
+        dataset = dataset.filter(lambda x : len(x['album']) > 0, num_proc=args.num_workers)
+        dataset = dataset.remove_columns(['log_time'])
+        
         train_dataset = dataset 
+        print('Train Dataset')
         print(train_dataset)
 
         eval_dataset = copy.deepcopy(dataset)
         eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0, num_proc=args.num_workers)
+        print('Validation Dataset')
         print(eval_dataset)
 
         # -- Train Data Collator
