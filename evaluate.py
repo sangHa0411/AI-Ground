@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from utils.loader import load_history, load_meta
 from utils.preprocessor import Spliter, parse
 from utils.collator import DataCollatorWithPadding
-from utils.metrics import recallk
+from utils.metrics import recallk, ndcgk, unique
 import warnings
 
 TOPK = 25
@@ -35,7 +35,9 @@ def train(args) :
     meta_data_plus_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_plus_file), encoding='utf-8')
 
     # -- Preprocess dataset
+    print('Loading user histories')
     history_df = load_history(history_data_df, meta_data_df)
+    print('Loading meta data')
     album_keywords, max_keyword_value = load_meta(meta_data_df, meta_data_plus_df, args.keyword_max_length)
 
     # -- Preprocess dataset & Raw Dataset
@@ -99,6 +101,8 @@ def train(args) :
     # -- Eval Dataset
     spliter = Spliter(leave_probability=args.leave_probability)
     dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
+    dataset = dataset.filter(lambda x : len(x['album']) > 0, num_proc=args.num_workers)
+    print(dataset)
     
     eval_dataset = copy.deepcopy(dataset)
     eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0, num_proc=args.num_workers)
@@ -145,30 +149,22 @@ def train(args) :
             predictions.extend(logits.tolist())
             labels.extend(data['labels'])
     
-    wrong_dataset = []
-    recall_25 = 0.0
+    recall_25, ndcg_25 = 0.0, 0.0
     for i in range(len(predictions)) :
 
         pred = predictions[i]
         label = labels[i]
 
         recall = recallk(label, pred)
-        recall_25 += recall
+        ndcg = ndcgk(label, pred)
 
-        if recall <= 0.1 :
-            data = {
-                'id' : eval_dataset[i]['id'],
-                'album' : eval_dataset[i]['album'],
-                'size' : len(eval_dataset[i]['album']),
-                'labels' : eval_dataset[i]['labels']
-            }
-            wrong_dataset.append(data)
+        recall_25 += recall
+        ndcg_25 += ndcg
 
     recall_25 /= len(predictions)
-    print('The number of wrong dataset : %d \t Recall-25 : %.3f' %(len(wrong_dataset), recall_25))
+    ndcg_25 /= len(predictions)
+    print('Recall-25 : %.3f \t Ndcg-25 : %.3f' %(recall_25, ndcg_25))
 
-    with open("./evaluation/evaluation_wrong_dataset.json", "w") as json_file:
-        json.dump(wrong_dataset, json_file, indent=4, ensure_ascii=False)
 
 if __name__ == '__main__':
 

@@ -118,7 +118,7 @@ class DataCollatorWithMasking :
         last_mask_tensor = torch.zeros(seq_size, dtype=torch.double)
         last_mask_tensor[-1] = 1.0
 
-        last_mask_indices = random.sample(range(batch_size), int(batch_size * 0.1))
+        last_mask_indices = random.sample(range(batch_size), int(batch_size * 0.2))
 
         label_tensor = album_tensor.clone()
         pad_token_id = speical_token_dict['album_pad_token_id']
