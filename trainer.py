@@ -37,6 +37,15 @@ class Trainer :
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
         
+
+        if args.reverse == True :
+            save_dir = os.path.join(args.save_dir, 'reverse')
+        else :
+            save_dir = os.path.join(args.save_dir, 'original')
+
+        if not os.path.exists(save_dir) :
+            os.mkdir(save_dir)
+
         load_dotenv(dotenv_path="wandb.env")
         WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
         wandb.login(key=WANDB_AUTH_KEY)
@@ -105,9 +114,6 @@ class Trainer :
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-
-            # loss.backward()
-            # optimizer.step()
             scheduler.step()
 
             if step % args.logging_steps == 0 and step > 0 :
@@ -122,13 +128,13 @@ class Trainer :
                     self.evaluate()
 
             if step % args.save_steps == 0 and step > 0 :
-                model_path = os.path.join(args.save_dir, f'checkpoint-{step}.pt')        
+                model_path = os.path.join(save_dir, f'checkpoint-{step}.pt')        
                 torch.save(self.model.state_dict(), model_path)
         
         if args.do_eval :
             self.evaluate()
 
-        model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
+        model_path = os.path.join(save_dir, f'checkpoint-{total_steps}.pt')        
         torch.save(self.model.state_dict(), model_path)
             
         wandb.finish()
@@ -160,7 +166,11 @@ class Trainer :
                     gender_input=gender_input,
                 )
 
-                logits = logits[:,-1,:].detach().cpu().numpy()
+                if self.args.reverse :
+                    logits = logits[:,0,:].detach().cpu().numpy()
+                else :
+                    logits = logits[:,-1,:].detach().cpu().numpy()
+
                 logits = np.argsort(-logits, axis=-1)
                 
                 eval_predictions.extend(logits.tolist())

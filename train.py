@@ -10,7 +10,7 @@ from model.bert import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
 from utils.loader import load_history, load_meta
-from utils.preprocessor import Spliter, parse
+from utils.preprocessor import Seperator, parse
 from utils.collator import DataCollatorWithMasking, DataCollatorWithPadding
 from trainer import Trainer
 
@@ -93,7 +93,7 @@ def train(args) :
 
     if args.do_eval :
     
-        spliter = Spliter(leave_probability=args.leave_probability)
+        spliter = Seperator()
         dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
         print(dataset)
 
@@ -117,6 +117,7 @@ def train(args) :
             keyword_max_length=args.keyword_max_length,
             mlm=True,
             mlm_probability=args.mlm_probability,
+            reverse=args.reverse,
         )
 
         # -- Data Loader 
@@ -134,6 +135,7 @@ def train(args) :
             special_token_dict=special_token_dict,
             max_length=args.max_length,
             keyword_max_length=args.keyword_max_length,
+            reverse=args.reverse,
         )
 
         # -- Data Loader 
@@ -160,6 +162,7 @@ def train(args) :
             keyword_max_length=args.keyword_max_length,
             mlm=True,
             mlm_probability=args.mlm_probability,
+            reverse=args.reverse,
         )
 
         # -- Data Loader 
@@ -217,6 +220,10 @@ if __name__ == '__main__':
     parser.add_argument('--history_data_file', type=str,
         default='history_data.csv',
         help='history data csv file'
+    )
+    parser.add_argument('--reverse', type=bool,
+        default=False,
+        help='reverse direction'
     )
     parser.add_argument('--max_length', type=int,
         default=256,

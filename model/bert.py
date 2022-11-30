@@ -39,8 +39,7 @@ class Bert(nn.Module) :
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
         # Dropouts
-        self.dropouts = nn.ModuleList([nn.Dropout(config.classifier_dropout) for _ in range(5)])
-        
+        self.classification_dropouts = nn.Dropout(config.classifier_dropout)
         self.apply(self._init_weights)
         
 
@@ -69,9 +68,8 @@ class Bert(nn.Module) :
         # Profile Embedding
         age_tensor = self.age_embed(age_input)
         gender_tensor = self.gender_embed(gender_input)
-
         profile_tensor = age_tensor + gender_tensor
-        profile_tensor = profile_tensor.unsqueeze(1)
+        profile_tensor = self.dropout(profile_tensor)
 
         # Keyword Embedding
         keyword_pad_token_id = self.config.keyword_size - 2
@@ -103,15 +101,9 @@ class Bert(nn.Module) :
         
         # Bert Output Tensor
         sequence_output = self.encoder(
-            hidden_states=input_tensor + profile_tensor, 
+            hidden_states=input_tensor + profile_tensor.unsqueeze(1), 
             attention_mask=attention_mask
         )[0]
 
-        for i in range(5) :
-            if i == 0 :
-                logits = torch.matmul(self.dropouts[i](sequence_output), self.album_embed.T)
-            else :
-                logits += torch.matmul(self.dropouts[i](sequence_output), self.album_embed.T)
-
-        logits /= len(self.dropouts)
+        logits = torch.matmul(self.classification_dropouts(sequence_output), self.album_embed.T)
         return logits

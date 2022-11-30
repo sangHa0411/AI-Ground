@@ -17,6 +17,7 @@ from utils.metrics import recallk, ndcgk, unique
 import warnings
 
 TOPK = 25
+reverses = [True, False]
 
 def train(args) :
 
@@ -84,19 +85,8 @@ def train(args) :
         max_position_embeddings=args.max_length,
     )
 
-    # -- Model
     num_labels = album_size
     model_config.vocab_size = num_labels
-    model = Bert(model_config).to(device)
-    model.load_state_dict(torch.load(args.model_path, map_location=cuda_str))
-
-    # -- Data Collator
-    data_collator = DataCollatorWithPadding(
-        profile_data=profile_data_df, 
-        special_token_dict=special_token_dict,
-        max_length=args.max_length,
-        keyword_max_length=args.keyword_max_length,
-    )
 
     # -- Eval Dataset
     spliter = Spliter(leave_probability=args.leave_probability)
@@ -108,46 +98,79 @@ def train(args) :
     eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0, num_proc=args.num_workers)
     print(eval_dataset)
 
-    # -- Loader 
-    data_loader = DataLoader(
-        eval_dataset, 
-        batch_size=args.eval_batch_size, 
-        shuffle=False,
-        num_workers=args.num_workers,
-        collate_fn=data_collator
-    )
-
+    
     predictions, labels = [], []
-    model.eval()
-    with torch.no_grad() :
-        for data in tqdm(data_loader) :
-            
-            ids = data['id'].detach().cpu().numpy().tolist()
-            
-            age_input, gender_input = data['age'], data['gender']
-            age_input = age_input.long().to(device)
-            gender_input = gender_input.long().to(device)
+    
+    for i in range(2) :
+        direction = reverses[i]
+        sub_predictions = []
+    
+        # -- Model
+        if direction :
+            model_path = os.path.join(args.model_dir, 'reverse', args.checkpoint_name)
+        else :
+            model_path = os.path.join(args.model_dir, 'original', args.checkpoint_name)
 
-            album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
-            album_input = album_input.long().to(device)
-            genre_input = genre_input.long().to(device)
-            country_input = country_input.long().to(device)
-            keyword_input = keyword_input.long().to(device)
+        model = Bert(model_config).to(device)
+        model.load_state_dict(torch.load(model_path, map_location=cuda_str))
 
-            logits = model(
-                album_input=album_input, 
-                genre_input=genre_input,
-                country_input=country_input,
-                keyword_input=keyword_input,
-                age_input=age_input,
-                gender_input=gender_input,
-            )
+        # -- Data Collator
+        data_org_collator = DataCollatorWithPadding(
+            profile_data=profile_data_df, 
+            special_token_dict=special_token_dict,
+            max_length=args.max_length,
+            keyword_max_length=args.keyword_max_length,
+            reverse=direction,
+        )
 
-            logits = logits[:, -1, :].detach().cpu().numpy()
-            logits = np.argsort(-logits, axis=-1)
+        # -- Loader 
+        data_loader = DataLoader(
+            eval_dataset, 
+            batch_size=args.eval_batch_size, 
+            shuffle=False,
+            num_workers=args.num_workers,
+            collate_fn=data_collator
+        )
 
-            predictions.extend(logits.tolist())
-            labels.extend(data['labels'])
+        model.eval()
+        with torch.no_grad() :
+            for data in tqdm(data_loader) :
+                
+                ids = data['id'].detach().cpu().numpy().tolist()
+                
+                age_input, gender_input = data['age'], data['gender']
+                age_input = age_input.long().to(device)
+                gender_input = gender_input.long().to(device)
+
+                album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
+                album_input = album_input.long().to(device)
+                genre_input = genre_input.long().to(device)
+                country_input = country_input.long().to(device)
+                keyword_input = keyword_input.long().to(device)
+
+                logits = model(
+                    album_input=album_input, 
+                    genre_input=genre_input,
+                    country_input=country_input,
+                    keyword_input=keyword_input,
+                    age_input=age_input,
+                    gender_input=gender_input,
+                )
+
+                if direction :
+                    logits = logits[:, 0, :].detach().cpu().numpy()
+                else :    
+                    logits = logits[:, -1, :].detach().cpu().numpy()
+
+                logits = F.softmax(logits, dim=-1).detach().cpu().numpy().tolist()
+                sub_predictions.extend(logits.tolist())
+                labels.extend(data['labels'])
+
+        sub_predictions = np.array(sub_predictions)
+        predictions.append(sub_predictions)
+
+    predictions = np.mean(predictions, axis=0)
+    labels = labels[:len(labels)//2]
     
     recall_25, ndcg_25 = 0.0, 0.0
     for i in range(len(predictions)) :
@@ -214,9 +237,13 @@ if __name__ == '__main__':
         default=4,
         help='the number of workers for data loader'
     )
-    parser.add_argument('--model_path', type=str,
-        default='./exps/checkpoint-3500.pt',
-        help='saved model path'
+    parser.add_argument('--model_dir', type=str,
+        default='./exps/',
+        help='saved model directory'
+    )
+    parser.add_argument('--checkpoint_name', type=str,
+        default='checkpoint-3500.pt',
+        help='checkpoint name'
     )
     parser.add_argument('--hidden_size', type=int,
         default=64,

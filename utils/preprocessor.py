@@ -37,10 +37,10 @@ def parse(df, keywords) :
     return parsed_dataset
 
 
-class Spliter :
+class Seperator :
 
-    def __init__(self, leave_probability) :
-        self.leave_probability = leave_probability
+    def __init__(self, ) :
+        pass
 
     def __call__(self, dataset) :
 
@@ -83,4 +83,5 @@ class Spliter :
         dataset['labels'] = labels
 
         return dataset
+
 
