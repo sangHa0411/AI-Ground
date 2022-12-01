@@ -4,6 +4,7 @@ import torch
 import argparse
 import numpy as np
 import pandas as pd
+import torch.nn.functional as F
 from tqdm import tqdm
 from model.bert import Bert
 from model.config import BertConfig
@@ -14,6 +15,7 @@ from utils.collator import DataCollatorWithPadding
 import warnings
 
 TOPK = 25
+reverses = [True, False]
 
 def train(args) :
 
@@ -30,6 +32,9 @@ def train(args) :
     profile_data_df = pd.read_csv(os.path.join(args.data_dir, args.profile_data_file), encoding='utf-8')
     meta_data_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_file), encoding='utf-8')
     meta_data_plus_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_plus_file), encoding='utf-8')
+
+    # -- Ids
+    profile_ids = list(profile_data_df['profile_id'])
 
     # -- Preprocess dataset
     history_df = load_history(history_data_df, meta_data_df)
@@ -78,61 +83,82 @@ def train(args) :
         max_position_embeddings=args.max_length,
     )
 
-
     # -- Model
     num_labels = album_size
     model_config.vocab_size = num_labels
-    model = Bert(model_config).to(device)
-    model.load_state_dict(torch.load(args.model_path, map_location=cuda_str))
 
-    # -- Data Collator
-    data_collator = DataCollatorWithPadding(
-        profile_data=profile_data_df, 
-        special_token_dict=special_token_dict,
-        max_length=args.max_length,
-        keyword_max_length=args.keyword_max_length,
-    )
+    prediction_logits = []
+    for i in range(2) :
+        reverse_flag = reverses[i]
+        sub_predictions = []
+    
+        # -- Model
+        if reverse_flag :
+            model_path = os.path.join(args.model_dir, 'reverse', args.checkpoint_name)
+        else :
+            model_path = os.path.join(args.model_dir, 'original', args.checkpoint_name)
 
-    # -- Loader 
-    data_loader = DataLoader(
-        dataset, 
-        batch_size=args.eval_batch_size, 
-        shuffle=False,
-        num_workers=args.num_workers,
-        collate_fn=data_collator
-    )
+        model = Bert(model_config).to(device)
+        model.load_state_dict(torch.load(model_path, map_location=cuda_str))
+
+        # -- Data Collator
+        data_collator = DataCollatorWithPadding(
+            profile_data=profile_data_df, 
+            special_token_dict=special_token_dict,
+            max_length=args.max_length,
+            keyword_max_length=args.keyword_max_length,
+            reverse=reverse_flag,
+        )
+
+        # -- Loader 
+        data_loader = DataLoader(
+            dataset, 
+            batch_size=args.eval_batch_size, 
+            shuffle=False,
+            num_workers=args.num_workers,
+            collate_fn=data_collator
+        )
+
+        model.eval()
+        with torch.no_grad() :
+            for data in tqdm(data_loader) :
+                
+                age_input, gender_input = data['age'], data['gender']
+                age_input = age_input.long().to(device)
+                gender_input = gender_input.long().to(device)
+
+                album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
+                album_input = album_input.long().to(device)
+                genre_input = genre_input.long().to(device)
+                country_input = country_input.long().to(device)
+                keyword_input = keyword_input.long().to(device)
+
+                logits = model(
+                    album_input=album_input, 
+                    genre_input=genre_input,
+                    country_input=country_input,
+                    keyword_input=keyword_input,
+                    age_input=age_input,
+                    gender_input=gender_input,
+                )
+
+                if reverse_flag :
+                    logits = logits[:, 0, :]
+                else :    
+                    logits = logits[:, -1, :]
+
+                logits = F.softmax(logits, dim=-1).detach().cpu().numpy().tolist()
+                sub_predictions.extend(logits)
+
+        sub_predictions = np.array(sub_predictions)
+        prediction_logits.append(sub_predictions)
+
+    prediction_logits = np.mean(prediction_logits, axis=0)
+    pred_args = np.argsort(-prediction_logits, axis=-1)
 
     predictions = {}
-    model.eval()
-    with torch.no_grad() :
-        for data in tqdm(data_loader) :
-            
-            ids = data['id'].detach().cpu().numpy().tolist()
-            
-            age_input, gender_input = data['age'], data['gender']
-            age_input = age_input.long().to(device)
-            gender_input = gender_input.long().to(device)
-
-            album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
-            album_input = album_input.long().to(device)
-            genre_input = genre_input.long().to(device)
-            country_input = country_input.long().to(device)
-            keyword_input = keyword_input.long().to(device)
-
-            logits = model(
-                album_input=album_input, 
-                genre_input=genre_input,
-                country_input=country_input,
-                keyword_input=keyword_input,
-                age_input=age_input,
-                gender_input=gender_input,
-            )
-
-            logits = logits[:, -1, :].detach().cpu().numpy()
-            pred_args = np.argsort(-logits, axis=-1)
-
-            for i, p in zip(ids, pred_args) :
-                predictions[i] = p[:TOPK]
+    for i, p in zip(profile_ids, pred_args) :
+        predictions[i] = p[:TOPK]
 
     submission_df = pd.read_csv(os.path.join(args.data_dir, args.submission_file))
     submission_predictions = []
@@ -187,9 +213,13 @@ if __name__ == '__main__':
         default=4,
         help='the number of workers for data loader'
     )
-    parser.add_argument('--model_path', type=str,
-        default='./exps/checkpoint-3500.pt',
-        help='saved model path'
+    parser.add_argument('--model_dir', type=str,
+        default='./exps/',
+        help='saved model directory'
+    )
+    parser.add_argument('--checkpoint_name', type=str,
+        default='checkpoint-3500.pt',
+        help='checkpoint name'
     )
     parser.add_argument('--hidden_size', type=int,
         default=64,

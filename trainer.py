@@ -37,7 +37,6 @@ class Trainer :
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
         
-
         if args.reverse == True :
             save_dir = os.path.join(args.save_dir, 'reverse')
         else :

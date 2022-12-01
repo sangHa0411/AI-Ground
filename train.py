@@ -257,10 +257,6 @@ if __name__ == '__main__':
         default=-1,
         help='max steps to training'
     )
-    parser.add_argument('--leave_probability', type=float,
-        default=0.2,
-        help='validation_ratio'
-    )
     parser.add_argument('--mlm_probability', type=float,
         default=0.15,
         help='masking ratio during training'

@@ -6,12 +6,13 @@ import json
 import argparse
 import numpy as np
 import pandas as pd
+import torch.nn.functional as F
 from tqdm import tqdm
 from model.bert import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
 from utils.loader import load_history, load_meta
-from utils.preprocessor import Spliter, parse
+from utils.preprocessor import Seperator, parse
 from utils.collator import DataCollatorWithPadding
 from utils.metrics import recallk, ndcgk, unique
 import warnings
@@ -89,7 +90,7 @@ def train(args) :
     model_config.vocab_size = num_labels
 
     # -- Eval Dataset
-    spliter = Spliter(leave_probability=args.leave_probability)
+    spliter = Seperator()
     dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
     dataset = dataset.filter(lambda x : len(x['album']) > 0, num_proc=args.num_workers)
     print(dataset)
@@ -98,15 +99,14 @@ def train(args) :
     eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0, num_proc=args.num_workers)
     print(eval_dataset)
 
-    
-    predictions, labels = [], []
-    
+    labels = list(eval_dataset['labels'])
+    prediction_logits = []
+
     for i in range(2) :
-        direction = reverses[i]
-        sub_predictions = []
+        reverse_flag = reverses[i]
     
         # -- Model
-        if direction :
+        if reverse_flag :
             model_path = os.path.join(args.model_dir, 'reverse', args.checkpoint_name)
         else :
             model_path = os.path.join(args.model_dir, 'original', args.checkpoint_name)
@@ -115,12 +115,12 @@ def train(args) :
         model.load_state_dict(torch.load(model_path, map_location=cuda_str))
 
         # -- Data Collator
-        data_org_collator = DataCollatorWithPadding(
+        data_collator = DataCollatorWithPadding(
             profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
             keyword_max_length=args.keyword_max_length,
-            reverse=direction,
+            reverse=reverse_flag,
         )
 
         # -- Loader 
@@ -133,6 +133,7 @@ def train(args) :
         )
 
         model.eval()
+        sub_predictions = []
         with torch.no_grad() :
             for data in tqdm(data_loader) :
                 
@@ -157,21 +158,20 @@ def train(args) :
                     gender_input=gender_input,
                 )
 
-                if direction :
-                    logits = logits[:, 0, :].detach().cpu().numpy()
+                if reverse_flag :
+                    logits = logits[:, 0, :]
                 else :    
-                    logits = logits[:, -1, :].detach().cpu().numpy()
+                    logits = logits[:, -1, :]
 
                 logits = F.softmax(logits, dim=-1).detach().cpu().numpy().tolist()
-                sub_predictions.extend(logits.tolist())
-                labels.extend(data['labels'])
+                sub_predictions.extend(logits)
 
         sub_predictions = np.array(sub_predictions)
-        predictions.append(sub_predictions)
+        prediction_logits.append(sub_predictions)
 
-    predictions = np.mean(predictions, axis=0)
-    labels = labels[:len(labels)//2]
-    
+    prediction_logits = np.mean(prediction_logits, axis=0)
+    predictions = np.argsort(-prediction_logits, axis=-1)
+
     recall_25, ndcg_25 = 0.0, 0.0
     for i in range(len(predictions)) :
 
@@ -186,7 +186,7 @@ def train(args) :
 
     recall_25 /= len(predictions)
     ndcg_25 /= len(predictions)
-    print('Recall-25 : %.3f \t Ndcg-25 : %.3f' %(recall_25, ndcg_25))
+    print('Recall-25 : %.5f \t Ndcg-25 : %.5f' %(recall_25, ndcg_25))
 
 
 if __name__ == '__main__':
@@ -208,10 +208,6 @@ if __name__ == '__main__':
     parser.add_argument('--history_data_file', type=str,
         default='history_data.csv',
         help='history data csv file'
-    )
-    parser.add_argument('--leave_probability', type=float,
-        default=0.2,
-        help='validation_ratio'
     )
     parser.add_argument('--data_dir', type=str,
         default='../data',
