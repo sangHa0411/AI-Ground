@@ -37,10 +37,7 @@ class Trainer :
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
         
-        if args.reverse == True :
-            save_dir = os.path.join(args.save_dir, 'reverse')
-        else :
-            save_dir = os.path.join(args.save_dir, 'original')
+        save_dir = os.path.join(args.save_dir, 'original')
 
         if not os.path.exists(save_dir) :
             os.mkdir(save_dir)
@@ -52,11 +49,7 @@ class Trainer :
         if args.max_steps == -1 :
             name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
         else :
-<<<<<<< HEAD
-            name = f"MS:{args.max_steps}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
-=======
             name = f"MS:{total_steps}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
->>>>>>> keyword
 
         wandb.init(
             entity="sangha0411",
@@ -169,11 +162,7 @@ class Trainer :
                     gender_input=gender_input,
                 )
 
-                if self.args.reverse :
-                    logits = logits[:,0,:].detach().cpu().numpy()
-                else :
-                    logits = logits[:,-1,:].detach().cpu().numpy()
-
+                logits = logits[:,-1,:].detach().cpu().numpy()
                 logits = np.argsort(-logits, axis=-1)
                 
                 eval_predictions.extend(logits.tolist())
