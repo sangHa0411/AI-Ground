@@ -18,7 +18,6 @@ from utils.metrics import recallk, ndcgk, unique
 import warnings
 
 TOPK = 25
-reverses = [True, False]
 
 def train(args) :
 
@@ -102,74 +101,61 @@ def train(args) :
     labels = list(eval_dataset['labels'])
     prediction_logits = []
 
-    for i in range(2) :
-        reverse_flag = reverses[i]
-    
-        # -- Model
-        if reverse_flag :
-            model_path = os.path.join(args.model_dir, 'reverse', args.checkpoint_name)
-        else :
-            model_path = os.path.join(args.model_dir, 'original', args.checkpoint_name)
+    # -- Model
+    model_path = os.path.join(args.model_dir, 'original', args.checkpoint_name)
 
-        model = Bert(model_config).to(device)
-        model.load_state_dict(torch.load(model_path, map_location=cuda_str))
+    model = Bert(model_config).to(device)
+    model.load_state_dict(torch.load(model_path, map_location=cuda_str))
 
-        # -- Data Collator
-        data_collator = DataCollatorWithPadding(
-            profile_data=profile_data_df, 
-            special_token_dict=special_token_dict,
-            max_length=args.max_length,
-            keyword_max_length=args.keyword_max_length,
-            reverse=reverse_flag,
-        )
+    # -- Data Collator
+    data_collator = DataCollatorWithPadding(
+        profile_data=profile_data_df, 
+        special_token_dict=special_token_dict,
+        max_length=args.max_length,
+        keyword_max_length=args.keyword_max_length,
+    )
 
-        # -- Loader 
-        data_loader = DataLoader(
-            eval_dataset, 
-            batch_size=args.eval_batch_size, 
-            shuffle=False,
-            num_workers=args.num_workers,
-            collate_fn=data_collator
-        )
+    # -- Loader 
+    data_loader = DataLoader(
+        eval_dataset, 
+        batch_size=args.eval_batch_size, 
+        shuffle=False,
+        num_workers=args.num_workers,
+        collate_fn=data_collator
+    )
 
-        model.eval()
-        sub_predictions = []
-        with torch.no_grad() :
-            for data in tqdm(data_loader) :
-                
-                ids = data['id'].detach().cpu().numpy().tolist()
-                
-                age_input, gender_input = data['age'], data['gender']
-                age_input = age_input.long().to(device)
-                gender_input = gender_input.long().to(device)
+    model.eval()
+    sub_predictions = []
+    with torch.no_grad() :
+        for data in tqdm(data_loader) :
+            
+            ids = data['id'].detach().cpu().numpy().tolist()
+            
+            age_input, gender_input = data['age'], data['gender']
+            age_input = age_input.long().to(device)
+            gender_input = gender_input.long().to(device)
 
-                album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
-                album_input = album_input.long().to(device)
-                genre_input = genre_input.long().to(device)
-                country_input = country_input.long().to(device)
-                keyword_input = keyword_input.long().to(device)
+            album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
+            album_input = album_input.long().to(device)
+            genre_input = genre_input.long().to(device)
+            country_input = country_input.long().to(device)
+            keyword_input = keyword_input.long().to(device)
 
-                logits = model(
-                    album_input=album_input, 
-                    genre_input=genre_input,
-                    country_input=country_input,
-                    keyword_input=keyword_input,
-                    age_input=age_input,
-                    gender_input=gender_input,
-                )
+            logits = model(
+                album_input=album_input, 
+                genre_input=genre_input,
+                country_input=country_input,
+                keyword_input=keyword_input,
+                age_input=age_input,
+                gender_input=gender_input,
+            )
 
-                if reverse_flag :
-                    logits = logits[:, 0, :]
-                else :    
-                    logits = logits[:, -1, :]
 
-                logits = F.softmax(logits, dim=-1).detach().cpu().numpy().tolist()
-                sub_predictions.extend(logits)
+            logits = logits[:, -1, :]
+            logits = F.softmax(logits, dim=-1).detach().cpu().numpy().tolist()
+            prediction_logits.extend(logits)
 
-        sub_predictions = np.array(sub_predictions)
-        prediction_logits.append(sub_predictions)
-
-    prediction_logits = np.mean(prediction_logits, axis=0)
+    prediction_logits = np.array(prediction_logits)
     predictions = np.argsort(-prediction_logits, axis=-1)
 
     recall_25, ndcg_25 = 0.0, 0.0

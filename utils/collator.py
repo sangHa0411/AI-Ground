@@ -13,7 +13,6 @@ class DataCollatorWithMasking :
         keyword_max_length,
         mlm=True,
         mlm_probability=0.15,
-        reverse=False,
         label_pad_token_id=-100,
     ) : 
         self.build(profile_data)
@@ -22,7 +21,6 @@ class DataCollatorWithMasking :
         self.keyword_max_length = keyword_max_length
         self.mlm = mlm
         self.mlm_probability = mlm_probability
-        self.reverse=reverse
         self.label_pad_token_id = label_pad_token_id
 
 
@@ -72,12 +70,6 @@ class DataCollatorWithMasking :
                 country = country[-max_length:]
                 keyword = keyword[-max_length:]
 
-            if self.reverse :
-                album = album[::-1]
-                genre = genre[::-1]
-                country = country[::-1]
-                keyword = keyword[::-1]
-
             albums.append(album)
             genres.append(genre)
             countries.append(country)
@@ -122,11 +114,6 @@ class DataCollatorWithMasking :
         batch_size, seq_size = album_tensor.shape
         
         last_mask_tensor = torch.zeros(seq_size, dtype=torch.double)
-        if self.reverse :
-            last_mask_tensor[0] = 1.0
-        else :
-            last_mask_tensor[-1] = 1.0
-
         last_mask_indices = random.sample(range(batch_size), int(batch_size * 0.1))
 
         label_tensor = album_tensor.clone()
@@ -158,13 +145,11 @@ class DataCollatorWithPadding :
         special_token_dict,
         max_length,
         keyword_max_length,
-        reverse=False
     ) : 
         self.build(profile_data)
         self.special_token_dict = special_token_dict
         self.max_length = max_length
         self.keyword_max_length = keyword_max_length
-        self.reverse = reverse
 
     def build(self, profile_data) :
 
@@ -218,12 +203,6 @@ class DataCollatorWithPadding :
                 genre = genre[-max_length:]
                 country = country[-max_length:]
                 keyword = keyword[-max_length:]
-
-            if self.reverse :
-                album = album[::-1]
-                genre = genre[::-1]
-                country = country[::-1]
-                keyword = keyword[::-1]
 
             if 'labels' in data :
                 labels.append(data['labels'])
