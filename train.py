@@ -9,7 +9,8 @@ import copy
 from model.bert import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
-from utils.preprocessor import Spliter, preprocess, parse
+from utils.loader import load_history, load_meta
+from utils.preprocessor import Seperator, parse
 from utils.collator import DataCollatorWithMasking, DataCollatorWithPadding
 from trainer import Trainer
 
@@ -31,16 +32,23 @@ def train(args) :
     history_data_df = pd.read_csv(os.path.join(args.data_dir, args.history_data_file), encoding='utf-8')
     profile_data_df = pd.read_csv(os.path.join(args.data_dir, args.profile_data_file), encoding='utf-8')
     meta_data_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_file), encoding='utf-8')
+    meta_data_plus_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_plus_file), encoding='utf-8')
 
     # -- Preprocess dataset
-    df = preprocess(history_data_df, meta_data_df)
-    dataset = parse(df)
+    print('Loading user histories')
+    history_df = load_history(history_data_df, meta_data_df)
+    print('Loading meta data')
+    album_keywords, max_keyword_value = load_meta(meta_data_df, meta_data_plus_df, args.keyword_max_length)
+
+    # -- Preprocess dataset
+    print('Preprocessing user histories')
+    dataset = parse(history_df, album_keywords)
     print(dataset)
     
     # -- Model Arguments
-    max_album_value = max(df['album_id'].unique())
-    max_genre_value = max(df['genre'].unique())
-    max_country_value = max(df['country'].unique())
+    max_album_value = max(history_df['album_id'].unique())
+    max_genre_value = max(history_df['genre'].unique())
+    max_country_value = max(history_df['country'].unique())
 
     # -- Token dictionary
     special_token_dict = {
@@ -50,17 +58,22 @@ def train(args) :
         'genre_mask_token_id' : max_genre_value+2,
         'album_pad_token_id' : max_album_value+1,
         'album_mask_token_id' : max_album_value+2,
+        'keyword_pad_token_id' : max_keyword_value+1,
+        'keyword_mask_token_id' : max_keyword_value+2,
     }
     
     album_size = max_album_value + 3
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
+    keyword_size = max_keyword_value + 3
 
-    # -- Model Config (Bert)
+    # -- Config
     model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
         country_size=country_size,
+        keyword_size=keyword_size,
+        keyword_length=args.keyword_max_length,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
         hidden_size=args.hidden_size,
@@ -80,14 +93,20 @@ def train(args) :
 
     if args.do_eval :
     
-        spliter = Spliter(leave_probability=args.leave_probability)
+        spliter = Seperator()
         dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
+        print(dataset)
 
+        dataset = dataset.filter(lambda x : len(x['album']) > 0, num_proc=args.num_workers)
+        dataset = dataset.remove_columns(['log_time'])
+        
         train_dataset = dataset 
+        print('Train Dataset')
         print(train_dataset)
 
         eval_dataset = copy.deepcopy(dataset)
-        eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0)
+        eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0, num_proc=args.num_workers)
+        print('Validation Dataset')
         print(eval_dataset)
 
         # -- Train Data Collator
@@ -95,6 +114,7 @@ def train(args) :
             profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
+            keyword_max_length=args.keyword_max_length,
             mlm=True,
             mlm_probability=args.mlm_probability,
         )
@@ -113,6 +133,7 @@ def train(args) :
             profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
+            keyword_max_length=args.keyword_max_length,
         )
 
         # -- Data Loader 
@@ -136,6 +157,7 @@ def train(args) :
             profile_data=profile_data_df, 
             special_token_dict=special_token_dict,
             max_length=args.max_length,
+            keyword_max_length=args.keyword_max_length,
             mlm=True,
             mlm_probability=args.mlm_probability,
         )
@@ -184,6 +206,10 @@ if __name__ == '__main__':
         default='meta_data.csv',
         help='metadata csv file'
     )
+    parser.add_argument('--meta_data_plus_file', type=str,
+        default='meta_data_plus.csv',
+        help='metadata csv file'
+    )
     parser.add_argument('--profile_data_file', type=str,
         default='profile_data.csv',
         help='profile data csv file'
@@ -195,6 +221,10 @@ if __name__ == '__main__':
     parser.add_argument('--max_length', type=int,
         default=256,
         help='max length of albums'
+    )
+    parser.add_argument('--keyword_max_length', type=int,
+        default=10,
+        help='max length of album keywords'
     )
     parser.add_argument('--learning_rate', type=float,
         default=5e-5,
@@ -219,10 +249,6 @@ if __name__ == '__main__':
     parser.add_argument('--max_steps', type=int,
         default=-1,
         help='max steps to training'
-    )
-    parser.add_argument('--leave_probability', type=float,
-        default=0.2,
-        help='validation_ratio'
     )
     parser.add_argument('--mlm_probability', type=float,
         default=0.15,

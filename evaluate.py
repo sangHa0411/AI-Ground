@@ -1,6 +1,8 @@
 
 import os
+import copy
 import torch
+import json
 import argparse
 import numpy as np
 import pandas as pd
@@ -10,8 +12,9 @@ from model.bert import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
 from utils.loader import load_history, load_meta
-from utils.preprocessor import parse
+from utils.preprocessor import Seperator, parse
 from utils.collator import DataCollatorWithPadding
+from utils.metrics import recallk, ndcgk, unique
 import warnings
 
 TOPK = 25
@@ -31,15 +34,14 @@ def train(args) :
     profile_data_df = pd.read_csv(os.path.join(args.data_dir, args.profile_data_file), encoding='utf-8')
     meta_data_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_file), encoding='utf-8')
     meta_data_plus_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_plus_file), encoding='utf-8')
-    
-    # -- Prediction Ids
-    ids = list(profile_data_df['profile_id'])
 
     # -- Preprocess dataset
+    print('Loading user histories')
     history_df = load_history(history_data_df, meta_data_df)
+    print('Loading meta data')
     album_keywords, max_keyword_value = load_meta(meta_data_df, meta_data_plus_df, args.keyword_max_length)
 
-    # -- Preprocess dataset
+    # -- Preprocess dataset & Raw Dataset
     dataset = parse(history_df, album_keywords)
     print(dataset)
 
@@ -60,6 +62,7 @@ def train(args) :
         'keyword_mask_token_id' : max_keyword_value+2,
     }
 
+    # -- Model Config
     album_size = max_album_value + 3
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
@@ -82,87 +85,94 @@ def train(args) :
         max_position_embeddings=args.max_length,
     )
 
-    # -- Model
     num_labels = album_size
     model_config.vocab_size = num_labels
 
+    # -- Eval Dataset
+    spliter = Seperator()
+    dataset = dataset.map(spliter, batched=True, num_proc=args.num_workers)
+    dataset = dataset.filter(lambda x : len(x['album']) > 0, num_proc=args.num_workers)
+    print(dataset)
+    
+    eval_dataset = copy.deepcopy(dataset)
+    eval_dataset = eval_dataset.filter(lambda x : len(x['labels']) > 0, num_proc=args.num_workers)
+    print(eval_dataset)
+
+    labels = list(eval_dataset['labels'])
     prediction_logits = []
 
-    # -- Model Directories
-    ensemble_size = len(model_dirs)
-    
-    for i in range(ensemble_size) :  
+    # -- Model
+    model_path = os.path.join(args.model_dir, 'original', args.checkpoint_name)
 
-        model_path = os.path.join(args.root_dir, 'seed' + model_dirs[i], 'original', args.checkpoint_name)
+    model = Bert(model_config).to(device)
+    model.load_state_dict(torch.load(model_path, map_location=cuda_str))
 
-        print('\nLoading Model : %s' %model_path)
+    # -- Data Collator
+    data_collator = DataCollatorWithPadding(
+        profile_data=profile_data_df, 
+        special_token_dict=special_token_dict,
+        max_length=args.max_length,
+        keyword_max_length=args.keyword_max_length,
+    )
 
-        model = Bert(model_config).to(device)
-        model.load_state_dict(torch.load(model_path, map_location=cuda_str))
+    # -- Loader 
+    data_loader = DataLoader(
+        eval_dataset, 
+        batch_size=args.eval_batch_size, 
+        shuffle=False,
+        num_workers=args.num_workers,
+        collate_fn=data_collator
+    )
 
-        # -- Data Collator
-        data_collator = DataCollatorWithPadding(
-            profile_data=profile_data_df, 
-            special_token_dict=special_token_dict,
-            max_length=args.max_length,
-            keyword_max_length=args.keyword_max_length,
-        )
+    model.eval()
+    sub_predictions = []
+    with torch.no_grad() :
+        for data in tqdm(data_loader) :
+            
+            ids = data['id'].detach().cpu().numpy().tolist()
+            
+            age_input, gender_input = data['age'], data['gender']
+            age_input = age_input.long().to(device)
+            gender_input = gender_input.long().to(device)
 
-        # -- Loader 
-        data_loader = DataLoader(
-            dataset, 
-            batch_size=args.eval_batch_size, 
-            shuffle=False,
-            num_workers=args.num_workers,
-            collate_fn=data_collator
-        )
+            album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
+            album_input = album_input.long().to(device)
+            genre_input = genre_input.long().to(device)
+            country_input = country_input.long().to(device)
+            keyword_input = keyword_input.long().to(device)
 
-        model.eval()
-        sub_predictions = []
-        with torch.no_grad() :
-            for data in tqdm(data_loader) :
+            logits = model(
+                album_input=album_input, 
+                genre_input=genre_input,
+                country_input=country_input,
+                keyword_input=keyword_input,
+                age_input=age_input,
+                gender_input=gender_input,
+            )
 
-                age_input, gender_input = data['age'], data['gender']
-                age_input = age_input.long().to(device)
-                gender_input = gender_input.long().to(device)
 
-                album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
-                album_input = album_input.long().to(device)
-                genre_input = genre_input.long().to(device)
-                country_input = country_input.long().to(device)
-                keyword_input = keyword_input.long().to(device)
+            logits = logits[:, -1, :]
+            logits = F.softmax(logits, dim=-1).detach().cpu().numpy().tolist()
+            prediction_logits.extend(logits)
 
-                logits = model(
-                    album_input=album_input, 
-                    genre_input=genre_input,
-                    country_input=country_input,
-                    keyword_input=keyword_input,
-                    age_input=age_input,
-                    gender_input=gender_input,
-                )
+    prediction_logits = np.array(prediction_logits)
+    predictions = np.argsort(-prediction_logits, axis=-1)
 
-                logits = logits[:, -1, :]
-                logits = F.softmax(logits, dim=-1).detach().cpu().numpy().tolist()
+    recall_25, ndcg_25 = 0.0, 0.0
+    for i in range(len(predictions)) :
 
-                sub_predictions.extend(logits)
-    
-        sub_predictions = np.array(sub_predictions)
-        prediction_logits.append(sub_predictions)
+        pred = predictions[i]
+        label = labels[i]
 
-    prediction_logit = np.mean(prediction_logits, axis=0)
-    pred_args = np.argsort(-prediction_logit, axis=-1)
+        recall = recallk(label, pred)
+        ndcg = ndcgk(label, pred)
 
-    predictions = {}
-    for i, p in zip(ids, pred_args) :
-        predictions[i] = p[:TOPK]
+        recall_25 += recall
+        ndcg_25 += ndcg
 
-    submission_df = pd.read_csv(os.path.join(args.data_dir, args.submission_file))
-    submission_predictions = []
-    for p_id in tqdm(submission_df['profile_id']) :
-        submission_predictions.append(predictions[p_id].tolist())
-
-    submission_df['predicted_list'] = submission_predictions
-    submission_df.to_csv(args.output_file, index=False)
+    recall_25 /= len(predictions)
+    ndcg_25 /= len(predictions)
+    print('Recall-25 : %.5f \t Ndcg-25 : %.5f' %(recall_25, ndcg_25))
 
 
 if __name__ == '__main__':
@@ -209,13 +219,9 @@ if __name__ == '__main__':
         default=4,
         help='the number of workers for data loader'
     )
-    parser.add_argument('--root_dir', type=str,
+    parser.add_argument('--model_dir', type=str,
         default='./exps/',
-        help='root directory'
-    )
-    parser.add_argument('--model_dirs', type=str,
-        default='[1,2,3,4,5]',
-        help='the name of model directories'
+        help='saved model directory'
     )
     parser.add_argument('--checkpoint_name', type=str,
         default='checkpoint-3500.pt',

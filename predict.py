@@ -4,11 +4,13 @@ import torch
 import argparse
 import numpy as np
 import pandas as pd
+import torch.nn.functional as F
 from tqdm import tqdm
 from model.bert import Bert
 from model.config import BertConfig
 from torch.utils.data import DataLoader
-from utils.preprocessor import preprocess, parse
+from utils.loader import load_history, load_meta
+from utils.preprocessor import parse
 from utils.collator import DataCollatorWithPadding
 import warnings
 
@@ -28,16 +30,23 @@ def train(args) :
     history_data_df = pd.read_csv(os.path.join(args.data_dir, args.history_data_file), encoding='utf-8')
     profile_data_df = pd.read_csv(os.path.join(args.data_dir, args.profile_data_file), encoding='utf-8')
     meta_data_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_file), encoding='utf-8')
+    meta_data_plus_df = pd.read_csv(os.path.join(args.data_dir, args.meta_data_plus_file), encoding='utf-8')
+
+    # -- Ids
+    profile_ids = list(profile_data_df['profile_id'])
 
     # -- Preprocess dataset
-    df = preprocess(history_data_df, meta_data_df)
-    dataset = parse(df)
+    history_df = load_history(history_data_df, meta_data_df)
+    album_keywords, max_keyword_value = load_meta(meta_data_df, meta_data_plus_df, args.keyword_max_length)
+
+    # -- Preprocess dataset
+    dataset = parse(history_df, album_keywords)
+    print(dataset)
 
     # -- Model Arguments
-    max_album_value = max(df['album_id'].unique())
-    max_genre_value = max(df['genre'].unique())
-    max_country_value = max(df['country'].unique())
-
+    max_album_value = max(history_df['album_id'].unique())
+    max_genre_value = max(history_df['genre'].unique())
+    max_country_value = max(history_df['country'].unique())
 
     # -- Token dictionary
     special_token_dict = {
@@ -47,16 +56,20 @@ def train(args) :
         'genre_mask_token_id' : max_genre_value+2,
         'album_pad_token_id' : max_album_value+1,
         'album_mask_token_id' : max_album_value+2,
+        'keyword_pad_token_id' : max_keyword_value+1,
+        'keyword_mask_token_id' : max_keyword_value+2,
     }
 
     album_size = max_album_value + 3
     genre_size = max_genre_value + 3
     country_size = max_country_value + 3
+    keyword_size = max_keyword_value + 3
 
     model_config = BertConfig(
         album_size=album_size,
         genre_size=genre_size,
         country_size=country_size,
+        keyword_size=keyword_size,
         age_size=len(profile_data_df['age'].unique()),
         gender_size=len(profile_data_df['sex'].unique()),
         hidden_size=args.hidden_size,
@@ -70,16 +83,23 @@ def train(args) :
     )
 
     # -- Model
-    num_labels = max_album_value + 1
+    num_labels = album_size
     model_config.vocab_size = num_labels
+
+    prediction_logits = []
+
+    # -- Model
+    model_path = os.path.join(args.model_dir, 'original', args.checkpoint_name)
+
     model = Bert(model_config).to(device)
-    model.load_state_dict(torch.load(args.model_path, map_location=cuda_str))
+    model.load_state_dict(torch.load(model_path, map_location=cuda_str))
 
     # -- Data Collator
     data_collator = DataCollatorWithPadding(
         profile_data=profile_data_df, 
         special_token_dict=special_token_dict,
         max_length=args.max_length,
+        keyword_max_length=args.keyword_max_length,
     )
 
     # -- Loader 
@@ -91,36 +111,42 @@ def train(args) :
         collate_fn=data_collator
     )
 
-
-    predictions = {}
     model.eval()
     with torch.no_grad() :
         for data in tqdm(data_loader) :
-            
-            ids = data['id'].detach().cpu().numpy().tolist()
             
             age_input, gender_input = data['age'], data['gender']
             age_input = age_input.long().to(device)
             gender_input = gender_input.long().to(device)
 
-            album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
+            album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
             album_input = album_input.long().to(device)
             genre_input = genre_input.long().to(device)
             country_input = country_input.long().to(device)
+            keyword_input = keyword_input.long().to(device)
 
             logits = model(
                 album_input=album_input, 
                 genre_input=genre_input,
                 country_input=country_input,
+                keyword_input=keyword_input,
                 age_input=age_input,
                 gender_input=gender_input,
             )
 
-            logits = logits[:, -1, :].detach().cpu().numpy()
-            pred_args = np.argsort(-logits, axis=-1)
+            logits = logits[:, -1, :]
 
-            for i, p in zip(ids, pred_args) :
-                predictions[i] = p[:TOPK]
+            logits = F.softmax(logits, dim=-1).detach().cpu().numpy().tolist()
+            prediction_logits.extend(logits)
+
+    prediction_logits = np.array(prediction_logits)
+    prediction_logits = np.mean(prediction_logits, axis=0)
+
+    pred_args = np.argsort(-prediction_logits, axis=-1)
+
+    predictions = {}
+    for i, p in zip(profile_ids, pred_args) :
+        predictions[i] = p[:TOPK]
 
     submission_df = pd.read_csv(os.path.join(args.data_dir, args.submission_file))
     submission_predictions = []
@@ -137,6 +163,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Upsage - (Ai Ground)')
     parser.add_argument('--meta_data_file', type=str,
         default='meta_data.csv',
+        help='metadata csv file'
+    )
+    parser.add_argument('--meta_data_plus_file', type=str,
+        default='meta_data_plus.csv',
         help='metadata csv file'
     )
     parser.add_argument('--profile_data_file', type=str,
@@ -159,6 +189,10 @@ if __name__ == '__main__':
         default=256,
         help='max length of albums'
     )
+    parser.add_argument('--keyword_max_length', type=int,
+        default=10,
+        help='max length of album keywords'
+    )
     parser.add_argument('--eval_batch_size', type=int,
         default=16,
         help='batch size for training'
@@ -167,9 +201,13 @@ if __name__ == '__main__':
         default=4,
         help='the number of workers for data loader'
     )
-    parser.add_argument('--model_path', type=str,
-        default='./exps/checkpoint-3500.pt',
-        help='saved model path'
+    parser.add_argument('--model_dir', type=str,
+        default='./exps/',
+        help='saved model directory'
+    )
+    parser.add_argument('--checkpoint_name', type=str,
+        default='checkpoint-3500.pt',
+        help='checkpoint name'
     )
     parser.add_argument('--hidden_size', type=int,
         default=64,

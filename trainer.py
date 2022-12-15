@@ -37,6 +37,14 @@ class Trainer :
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
         scheduler = LinearWarmupScheduler(optimizer, total_steps, warmup_steps)
         
+        if args.reverse == True :
+            save_dir = os.path.join(args.save_dir, 'reverse')
+        else :
+            save_dir = os.path.join(args.save_dir, 'original')
+
+        if not os.path.exists(save_dir) :
+            os.mkdir(save_dir)
+
         load_dotenv(dotenv_path="wandb.env")
         WANDB_AUTH_KEY = os.getenv("WANDB_AUTH_KEY")
         wandb.login(key=WANDB_AUTH_KEY)
@@ -44,7 +52,11 @@ class Trainer :
         if args.max_steps == -1 :
             name = f"EP:{args.epochs}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
         else :
+<<<<<<< HEAD
             name = f"MS:{args.max_steps}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
+=======
+            name = f"MS:{total_steps}_BS:{args.train_batch_size}_LR:{args.learning_rate}_WR:{args.warmup_ratio}_WD:{args.weight_decay}"
+>>>>>>> keyword
 
         wandb.init(
             entity="sangha0411",
@@ -64,8 +76,10 @@ class Trainer :
         wandb.config.update(training_args)
 
         self.model.to(self.device)
-        vocab_size = self.model.config.vocab_size
-    
+        num_labels = self.model.config.vocab_size
+
+        scaler = torch.cuda.amp.GradScaler()
+
         for step in tqdm(range(total_steps)) :
 
             try :
@@ -76,28 +90,33 @@ class Trainer :
 
             optimizer.zero_grad()
 
-            age_input, gender_input = data['age'], data['gender']
-            age_input = age_input.long().to(self.device)
-            gender_input = gender_input.long().to(self.device)
+            with torch.cuda.amp.autocast():
 
-            album_input, genre_input, country_input = data['album_input'], data['genre_input'], data['country_input']
-            album_input = album_input.long().to(self.device)
-            genre_input = genre_input.long().to(self.device)
-            country_input = country_input.long().to(self.device)
+                age_input, gender_input = data['age'], data['gender']
+                age_input = age_input.long().to(self.device)
+                gender_input = gender_input.long().to(self.device)
 
-            logits = self.model(
-                album_input=album_input, 
-                genre_input=genre_input,
-                country_input=country_input,
-                age_input=age_input,
-                gender_input=gender_input,
-            )
+                album_input, genre_input, country_input, keyword_input = data['album_input'], data['genre_input'], data['country_input'], data['keyword_input']
+                album_input = album_input.long().to(self.device)
+                genre_input = genre_input.long().to(self.device)
+                country_input = country_input.long().to(self.device)
+                keyword_input = keyword_input.long().to(self.device)
 
-            labels = data['labels'].long().to(self.device)
-            loss = loss_fn(logits.view(-1, vocab_size), labels.view(-1,))
+                logits = self.model(
+                    album_input=album_input, 
+                    genre_input=genre_input,
+                    country_input=country_input,
+                    keyword_input=keyword_input,
+                    age_input=age_input,
+                    gender_input=gender_input,
+                )
 
-            loss.backward()
-            optimizer.step()
+                labels = data['labels'].long().to(self.device)            
+                loss = loss_fn(logits.view(-1, num_labels), labels.view(-1,))
+
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             scheduler.step()
 
             if step % args.logging_steps == 0 and step > 0 :
@@ -110,16 +129,16 @@ class Trainer :
                 if step % args.eval_steps == 0 and step > 0 :
                     print('\nValidation at %d step' %step)
                     self.evaluate()
-            else :
-                if step % args.save_steps == 0 and step > 0 :
-                    model_path = os.path.join(args.save_dir, f'checkpoint-{step}.pt')        
-                    torch.save(self.model.state_dict(), model_path)
 
+            if step % args.save_steps == 0 and step > 0 :
+                model_path = os.path.join(save_dir, f'checkpoint-{step}.pt')        
+                torch.save(self.model.state_dict(), model_path)
+        
         if args.do_eval :
             self.evaluate()
-        else :
-            model_path = os.path.join(args.save_dir, f'checkpoint-{total_steps}.pt')        
-            torch.save(self.model.state_dict(), model_path)
+
+        model_path = os.path.join(save_dir, f'checkpoint-{total_steps}.pt')        
+        torch.save(self.model.state_dict(), model_path)
             
         wandb.finish()
 
@@ -135,28 +154,34 @@ class Trainer :
                 age_input = age_input.long().to(self.device)
                 gender_input = gender_input.long().to(self.device)
 
-                album_input, genre_input, country_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input']
+                album_input, genre_input, country_input, keyword_input = eval_data['album_input'], eval_data['genre_input'], eval_data['country_input'], eval_data['keyword_input']
                 album_input = album_input.long().to(self.device)
                 genre_input = genre_input.long().to(self.device)
                 country_input = country_input.long().to(self.device)
+                keyword_input = keyword_input.long().to(self.device)
 
                 logits = self.model(
                     album_input=album_input, 
                     genre_input=genre_input,
                     country_input=country_input,
+                    keyword_input=keyword_input,
                     age_input=age_input,
                     gender_input=gender_input,
                 )
 
-                logits = logits[:,-1,:].detach().cpu().numpy()
+                if self.args.reverse :
+                    logits = logits[:,0,:].detach().cpu().numpy()
+                else :
+                    logits = logits[:,-1,:].detach().cpu().numpy()
+
                 logits = np.argsort(-logits, axis=-1)
                 
                 eval_predictions.extend(logits.tolist())
                 eval_labels.extend(eval_data['labels'])
 
-            eval_log = compute_metrics(eval_predictions, eval_labels)
-            eval_log = {'eval/' + k : v for k, v in eval_log.items()}
-            wandb.log(eval_log)
-            print(eval_log)
+        eval_log = compute_metrics(eval_predictions, eval_labels)
+        eval_log = {'eval/' + k : v for k, v in eval_log.items()}
+        wandb.log(eval_log)
+        print(eval_log)
 
         self.model.train()
