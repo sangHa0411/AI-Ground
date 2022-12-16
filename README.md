@@ -35,7 +35,6 @@
           * 본인이 실험할 때는 0.4 ~ 0.6이 좋은 성능을 보여주었다.
       * Shared Embedding
           * Input Embedding을 그대로 Output Classification을 사용할 때 많은 성능 향상을 가져왔다.
-          * Output Classifiaction Layer를 별도로 선언하면 과적합 
  
 ## Hyperparameter
 |Hyperparameter|Value|
