@@ -22,6 +22,21 @@
   2. Huggingface의 transformers 라이브러리에 있는 Bert Model 코드를 활용
   3. 2번 모델에 사용자의 특징 및 각 영상의 키워드 데이터를 사용할 수 있게 모델을 고도화
  
+## BERT4REC
+  1. 대회를 진행하면서 파악한 BERT4REC의 중요 특징
+      * End-to-End
+          * 학습을 할 때는 Sequence 길의 특정 비율에 해당되는 만큼 중간 중간에 MASK 토큰을 씌우고 MASK에 해당되는 영상이 무엇인지를 학습한다.
+          * 학습한 모델을 그래도 추론에 활용하는데 추론을 할 때는 Sequence 뒤에 MASK 토큰을 이어 붙이고 해당 토큰이 무슨 영상을 가리키는지 확인한다.
+      * Model Structure
+          * 모델 깊이 및 크기가 어느정도 커야지 MLM이 학습이 된다.
+          * 본인은 BERT의 BASE hyperparameter를 그대로 사용하였다.
+      * Training
+          * Mask Probability가 너무 낮으면 모델 성능이 낮아진다.
+          * 본인이 실험할 때는 0.4 ~ 0.6이 좋은 성능을 보여주었다.
+      * Shared Embedding
+          * Input Embedding을 그대로 Output Classification을 사용할 때 많은 성능 향상을 가져왔다.
+          * Output Classifiaction Layer를 별도로 선언하면 과적합 
+ 
 ## Hyperparameter
 |Hyperparameter|Value|
 |--------|-----------|
